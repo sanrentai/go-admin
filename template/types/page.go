@@ -8,8 +8,10 @@ import (
 	"github.com/GoAdminGroup/go-admin/modules/config"
 	"github.com/GoAdminGroup/go-admin/modules/menu"
 	"github.com/GoAdminGroup/go-admin/modules/system"
+	"github.com/GoAdminGroup/go-admin/modules/utils"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/models"
 	"html/template"
+	"strconv"
 )
 
 // Attribute is the component interface of template. Every component of
@@ -91,10 +93,40 @@ type SystemInfo struct {
 
 // Panel contains the main content of the template which used as pjax.
 type Panel struct {
-	Content     template.HTML
 	Title       string
 	Description string
+	Content     template.HTML
 	Url         string
+
+	// Whether to toggle the sidebar
+	MiniSidebar bool
+
+	// Auto refresh page switch.
+	AutoRefresh bool
+	// Refresh page intervals, the unit is second.
+	RefreshInterval []int
+}
+
+func (p Panel) GetContent(prod bool) Panel {
+	if p.MiniSidebar {
+		p.Content += `<script>$("body").addClass("sidebar-collapse")</script>`
+	}
+	if p.AutoRefresh {
+		refreshTime := 60
+		if len(p.RefreshInterval) > 0 {
+			refreshTime = p.RefreshInterval[0]
+		}
+
+		p.Content += `<script>
+window.setTimeout(function(){
+	$.pjax.reload('#pjax-container');
+}, ` + template.HTML(strconv.Itoa(refreshTime*1000)) + `);
+</script>`
+	}
+	if prod {
+		utils.CompressedContent(&p.Content)
+	}
+	return p
 }
 
 type GetPanelFn func(ctx interface{}) (Panel, error)

@@ -1,8 +1,8 @@
 GOCMD=go
 GOBUILD=$(GOCMD) build
 BINARY_NAME=adm
-LASTVERSION=v1.1.6
-VERSION=v1.1.7
+LASTVERSION=v1.1.8
+VERSION=v1.1.9
 CLI=adm
 
 TEST_CONFIG_PATH=./../common/config.json
@@ -98,6 +98,7 @@ import-sqlite:
 	cp ./data/admin.db ./tests/common/admin.db
 
 import-mysql:
+	mysql -uroot -proot -e "create database if not exists \`go-admin-test\`"
 	mysql -uroot -proot go-admin-test < ./data/admin.sql
 
 import-postgresql:

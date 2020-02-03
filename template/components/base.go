@@ -72,7 +72,16 @@ func (b Base) Alert() types.AlertAttribute {
 func (b Base) Label() types.LabelAttribute {
 	return &LabelAttribute{
 		Name:      "label",
-		Type:      "success",
+		Type:      "",
+		Content:   "",
+		Attribute: b.Attribute,
+	}
+}
+
+func (b Base) Link() types.LinkAttribute {
+	return &LinkAttribute{
+		Name:      "link",
+		NewTab:    false,
 		Content:   "",
 		Attribute: b.Attribute,
 	}
