@@ -185,8 +185,16 @@ func (v Value) String() string {
 	return string(v)
 }
 
+func GetValueFromDatabaseType(typ DatabaseType, value interface{}, json bool) Value {
+	if json {
+		return GetValueFromJSONOfDatabaseType(typ, value)
+	} else {
+		return GetValueFromSQLOfDatabaseType(typ, value)
+	}
+}
+
 // GetValueFromDatabaseType return Value of given DatabaseType and interface.
-func GetValueFromDatabaseType(typ DatabaseType, value interface{}) Value {
+func GetValueFromSQLOfDatabaseType(typ DatabaseType, value interface{}) Value {
 	switch {
 	case Contains(typ, StringTypeList):
 		if v, ok := value.(string); ok {
@@ -203,6 +211,45 @@ func GetValueFromDatabaseType(typ DatabaseType, value interface{}) Value {
 		return "false"
 	case Contains(typ, IntTypeList):
 		if v, ok := value.(int64); ok {
+			return Value(fmt.Sprintf("%d", v))
+		}
+		return "0"
+	case Contains(typ, FloatTypeList):
+		if v, ok := value.(float64); ok {
+			return Value(fmt.Sprintf("%f", v))
+		}
+		return "0"
+	case Contains(typ, UintTypeList):
+		if v, ok := value.([]uint8); ok {
+			return Value(string(v))
+		}
+		return "0"
+	}
+	panic("wrong type：" + string(typ))
+}
+
+// GetValueFromJSONOfDatabaseType return Value of given DatabaseType and interface from JSON string value.
+func GetValueFromJSONOfDatabaseType(typ DatabaseType, value interface{}) Value {
+	switch {
+	case Contains(typ, StringTypeList):
+		if v, ok := value.(string); ok {
+			return Value(v)
+		}
+		return ""
+	case Contains(typ, BoolTypeList):
+		if v, ok := value.(bool); ok {
+			if v {
+				return "true"
+			}
+			return "false"
+		}
+		return "false"
+	case Contains(typ, IntTypeList):
+		if v, ok := value.(float64); ok {
+			return Value(fmt.Sprintf("%d", int64(v)))
+		} else if v, ok := value.(int64); ok {
+			return Value(fmt.Sprintf("%d", v))
+		} else if v, ok := value.(int); ok {
 			return Value(fmt.Sprintf("%d", v))
 		}
 		return "0"

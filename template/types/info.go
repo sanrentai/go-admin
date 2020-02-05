@@ -6,6 +6,7 @@ import (
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/db"
 	"github.com/GoAdminGroup/go-admin/modules/utils"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/parameter"
 	"github.com/GoAdminGroup/go-admin/template/types/form"
 	"github.com/GoAdminGroup/go-admin/template/types/table"
 	"html"
@@ -362,6 +363,8 @@ func (t TabHeaders) Add(header string) TabHeaders {
 	return append(t, header)
 }
 
+type GetDataFn func(param parameter.Parameters) ([]map[string]interface{}, int)
+
 type DeleteFn func(ids []string) error
 
 type Sort uint8
@@ -384,7 +387,8 @@ type InfoPanel struct {
 	TabGroups  TabGroups
 	TabHeaders TabHeaders
 
-	Sort Sort
+	Sort      Sort
+	SortField string
 
 	PageSizeList    []int
 	DefaultPageSize int
@@ -409,6 +413,8 @@ type InfoPanel struct {
 	DeleteHook  DeleteFn
 	PreDeleteFn DeleteFn
 	DeleteFn    DeleteFn
+
+	GetDataFn GetDataFn
 
 	processChains DisplayProcessFnChains
 
@@ -516,7 +522,7 @@ var DefaultPageSizeList = []int{10, 20, 30, 50, 100}
 
 const DefaultPageSize = 10
 
-func NewInfoPanel() *InfoPanel {
+func NewInfoPanel(pk string) *InfoPanel {
 	return &InfoPanel{
 		curFieldListIndex: -1,
 		PageSizeList:      DefaultPageSizeList,
@@ -525,6 +531,7 @@ func NewInfoPanel() *InfoPanel {
 		Buttons:           make(Buttons, 0),
 		Callbacks:         make(Callbacks, 0),
 		Wheres:            make([]Where, 0),
+		SortField:         pk,
 	}
 }
 
@@ -627,6 +634,11 @@ func (i *InfoPanel) SetPreDeleteFn(fn DeleteFn) *InfoPanel {
 
 func (i *InfoPanel) SetDeleteFn(fn DeleteFn) *InfoPanel {
 	i.DeleteFn = fn
+	return i
+}
+
+func (i *InfoPanel) SetGetDataFn(fn GetDataFn) *InfoPanel {
+	i.GetDataFn = fn
 	return i
 }
 
@@ -910,6 +922,11 @@ func (i *InfoPanel) SetDescription(desc string) *InfoPanel {
 
 func (i *InfoPanel) SetFilterFormLayout(layout form.Layout) *InfoPanel {
 	i.FilterFormLayout = layout
+	return i
+}
+
+func (i *InfoPanel) SetSortField(field string) *InfoPanel {
+	i.SortField = field
 	return i
 }
 
