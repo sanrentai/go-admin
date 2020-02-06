@@ -57,7 +57,7 @@ func (r FieldModelValue) First() string {
 type FieldFilterFn func(value FieldModel) interface{}
 
 // PostFieldFilterFn is filter function of data.
-type PostFieldFilterFn func(value PostFieldModel) string
+type PostFieldFilterFn func(value PostFieldModel) interface{}
 
 type DisplayProcessFn func(string) string
 
@@ -298,6 +298,7 @@ type Field struct {
 	FilterOptionExt template.JS
 	FilterHead      string
 	FilterHelpMsg   template.HTML
+	FilterProcess   func(string) string
 
 	FieldDisplay
 }
@@ -404,7 +405,8 @@ type InfoPanel struct {
 	IsHideFilterArea   bool
 	FilterFormLayout   form.Layout
 
-	Wheres []Where
+	Wheres    []Where
+	WhereRaws WhereRaw
 
 	Callbacks Callbacks
 
@@ -425,9 +427,15 @@ type InfoPanel struct {
 }
 
 type Where struct {
+	Join     string
 	Field    string
 	Operator string
 	Arg      interface{}
+}
+
+type WhereRaw struct {
+	Raw  string
+	Args []interface{}
 }
 
 type Action interface {
@@ -531,12 +539,24 @@ func NewInfoPanel(pk string) *InfoPanel {
 		Buttons:           make(Buttons, 0),
 		Callbacks:         make(Callbacks, 0),
 		Wheres:            make([]Where, 0),
+		WhereRaws:         WhereRaw{},
 		SortField:         pk,
 	}
 }
 
 func (i *InfoPanel) Where(field string, operator string, arg interface{}) *InfoPanel {
-	i.Wheres = append(i.Wheres, Where{Field: field, Operator: operator, Arg: arg})
+	i.Wheres = append(i.Wheres, Where{Field: field, Operator: operator, Arg: arg, Join: "and"})
+	return i
+}
+
+func (i *InfoPanel) WhereOr(field string, operator string, arg interface{}) *InfoPanel {
+	i.Wheres = append(i.Wheres, Where{Field: field, Operator: operator, Arg: arg, Join: "or"})
+	return i
+}
+
+func (i *InfoPanel) WhereRaw(raw string, arg ...interface{}) *InfoPanel {
+	i.WhereRaws.Raw = raw
+	i.WhereRaws.Args = arg
 	return i
 }
 
@@ -808,6 +828,11 @@ func (i *InfoPanel) FieldFilterable(filterType ...FilterType) *InfoPanel {
 func (i *InfoPanel) FieldFilterOptions(options []map[string]string) *InfoPanel {
 	i.FieldList[i.curFieldListIndex].FilterOptions = options
 	i.FieldList[i.curFieldListIndex].FilterOptionExt = `{"allowClear": "true"}`
+	return i
+}
+
+func (i *InfoPanel) FieldFilterProcess(process func(string) string) *InfoPanel {
+	i.FieldList[i.curFieldListIndex].FilterProcess = process
 	return i
 }
 
