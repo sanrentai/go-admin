@@ -62,6 +62,7 @@ var cn = map[string]string{
 	"detail": "详情",
 
 	"avatar":     "头像",
+	"username":   "用户名",
 	"password":   "密码",
 	"slug":       "标志",
 	"permission": "权限",
@@ -92,4 +93,5 @@ var cn = map[string]string{
 	"a path a line":                                 "一行一个路径，换行输入新路径",
 	"slug or http_path or name should not be empty": "标志或路径或权限名不能为空",
 	"no roles":                                      "无角色",
+	"query time":                                    "查询用时",
 }
