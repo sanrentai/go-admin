@@ -2,6 +2,7 @@ package action
 
 import (
 	"github.com/GoAdminGroup/go-admin/context"
+	"github.com/GoAdminGroup/go-admin/modules/auth"
 	"github.com/GoAdminGroup/go-admin/modules/utils"
 	template2 "github.com/GoAdminGroup/go-admin/template"
 	"html/template"
@@ -13,43 +14,59 @@ type PopUpAction struct {
 	Method   string
 	Id       string
 	Title    string
+	Data     AjaxData
 	Handlers []context.Handler
 }
 
-func PopUp(url, title string, handlers ...context.Handler) *PopUpAction {
+func PopUp(url, title string, handler Handler) *PopUpAction {
 	return &PopUpAction{
 		Url:      url,
 		Title:    title,
 		Method:   "post",
+		Data:     NewAjaxData(),
 		Id:       "info-popup-model-" + utils.Uuid(10),
-		Handlers: handlers,
+		Handlers: context.Handlers{handler.Wrap()},
 	}
 }
 
-func (pop *PopUpAction) SetUrl(url string) {
-	pop.Url = url
+func (pop *PopUpAction) SetData(data map[string]interface{}) *PopUpAction {
+	pop.Data = pop.Data.Add(data)
+	return pop
 }
 
-func (pop *PopUpAction) SetMethod(method string) {
+func (pop *PopUpAction) SetUrl(url string) *PopUpAction {
+	pop.Url = url
+	return pop
+}
+
+func (pop *PopUpAction) SetMethod(method string) *PopUpAction {
 	pop.Method = method
+	return pop
 }
 
 func (pop *PopUpAction) GetCallbacks() context.Node {
-	return context.Node{Path: pop.Url, Method: pop.Method, Handlers: pop.Handlers}
+	return context.Node{
+		Path:     pop.Url,
+		Method:   pop.Method,
+		Handlers: pop.Handlers,
+		Value:    map[string]interface{}{auth.ContextNodeNeedAuth: 1},
+	}
 }
 
-func (pop *PopUpAction) SetBtnId(btnId string) {
-	pop.BtnId = btnId
-}
+func (pop *PopUpAction) SetBtnId(btnId string)   { pop.BtnId = btnId }
+func (pop *PopUpAction) BtnClass() template.HTML { return "" }
 
 func (pop *PopUpAction) Js() template.JS {
-	return template.JS(`$('#` + pop.BtnId + `').on('click', function (event) {
+	return template.JS(`$('.` + pop.BtnId + `').on('click', function (event) {
+						let data = ` + pop.Data.JSON() + `;
+						let id = $(this).attr("data-id");
+						if (id && id !== "") {
+							data["id"] = id;
+						}
 						$.ajax({
                             method: '` + pop.Method + `',
                             url: "` + pop.Url + `",
-                            data: {
-								"ids": {%ids}
-							},
+                            data: data,
                             success: function (data) { 
                                 if (typeof (data) === "string") {
                                     data = JSON.parse(data);

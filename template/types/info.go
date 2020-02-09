@@ -441,6 +441,7 @@ type WhereRaw struct {
 type Action interface {
 	Js() template.JS
 	BtnAttribute() template.HTML
+	BtnClass() template.HTML
 	ExtContent() template.HTML
 	SetBtnId(btnId string)
 	GetCallbacks() context.Node
@@ -459,6 +460,7 @@ func NewDefaultAction(attr, ext template.HTML, js template.JS) *DefaultAction {
 func (def *DefaultAction) SetBtnId(btnId string)       {}
 func (def *DefaultAction) Js() template.JS             { return def.JS }
 func (def *DefaultAction) BtnAttribute() template.HTML { return def.Attr }
+func (def *DefaultAction) BtnClass() template.HTML     { return "" }
 func (def *DefaultAction) ExtContent() template.HTML   { return def.Ext }
 func (def *DefaultAction) GetCallbacks() context.Node  { return context.Node{} }
 
@@ -494,7 +496,7 @@ func (b DefaultButton) Content() (template.HTML, template.JS) {
 	}
 
 	h := `<div class="btn-group pull-right" style="margin-right: 10px">
-                <a id="` + template.HTML(b.Id) + `" ` + style + `class="btn btn-sm btn-default" ` + b.Action.BtnAttribute() + `>
+                <a ` + style + ` class="` + template.HTML(b.Id) + ` btn btn-sm btn-default ` + b.Action.BtnClass() + `" ` + b.Action.BtnAttribute() + `>
                     <i class="fa ` + template.HTML(b.Icon) + `"></i>&nbsp;&nbsp;` + b.Title + `
                 </a>
         </div>` + b.Action.ExtContent()
@@ -508,7 +510,7 @@ type ActionButton struct {
 }
 
 func (b ActionButton) Content() (template.HTML, template.JS) {
-	h := template.HTML(`<li><a class="`+template.HTML(b.Id)+`" `+b.Action.BtnAttribute()+`>`+b.Title+`</a></li>`) + b.Action.ExtContent()
+	h := template.HTML(`<li style="cursor: pointer;"><a data-id="{%id}" class="`+template.HTML(b.Id)+`" `+b.Action.BtnAttribute()+`>`+b.Title+`</a></li>`) + b.Action.ExtContent()
 	return h, b.Action.Js()
 }
 
