@@ -17,6 +17,7 @@ import (
 	"github.com/GoAdminGroup/go-admin/template/types"
 	"github.com/gorilla/mux"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -163,6 +164,11 @@ func (g *Gorilla) Path() string {
 
 func (g *Gorilla) Method() string {
 	return g.ctx.Request.Method
+}
+
+func (g *Gorilla) FormParam() url.Values {
+	_ = g.ctx.Request.ParseMultipartForm(32 << 20)
+	return g.ctx.Request.PostForm
 }
 
 func (g *Gorilla) PjaxHeader() string {

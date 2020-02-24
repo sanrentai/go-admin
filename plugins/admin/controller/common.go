@@ -9,8 +9,11 @@ import (
 	"github.com/GoAdminGroup/go-admin/modules/service"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
 	"github.com/GoAdminGroup/go-admin/template"
+	"github.com/GoAdminGroup/go-admin/template/icon"
 	"github.com/GoAdminGroup/go-admin/template/types"
 	template2 "html/template"
+	"regexp"
+	"strings"
 )
 
 var (
@@ -18,7 +21,12 @@ var (
 	captchaConfig map[string]string
 	services      service.List
 	conn          db.Connection
+	routes        context.RouterMap
 )
+
+func SetRoutes(r context.RouterMap) {
+	routes = r
+}
 
 // SetConfig set the config.
 func SetCaptcha(cap map[string]string) {
@@ -34,6 +42,34 @@ func SetConfig(cfg c.Config) {
 func SetServices(l service.List) {
 	services = l
 	conn = db.GetConnection(services)
+}
+
+func route(name string) context.Router {
+	return routes.Get(name)
+}
+
+func routePath(name string, value ...string) string {
+	return routes.Get(name).GetURL(value...)
+}
+
+func routePathWithPrefix(name string, prefix string) string {
+	return routePath(name, "prefix", prefix)
+}
+
+func isInfoUrl(s string) bool {
+	reg, _ := regexp.Compile("(.*?)info/(.*?)$")
+	sub := reg.FindStringSubmatch(s)
+	return len(sub) > 2 && !strings.Contains(sub[2], "/")
+}
+
+func isNewUrl(s string, p string) bool {
+	reg, _ := regexp.Compile("(.*?)info/" + p + "/new")
+	return reg.MatchString(s)
+}
+
+func isEditUrl(s string, p string) bool {
+	reg, _ := regexp.Compile("(.*?)info/" + p + "/edit")
+	return reg.MatchString(s)
 }
 
 func authSrv() *auth.TokenService {
@@ -85,41 +121,40 @@ func isPjax(ctx *context.Context) bool {
 }
 
 func formFooter() template2.HTML {
-	col1 := aCol().SetSize(map[string]string{"md": "2"}).GetContent()
+	col1 := aCol().SetSize(types.SizeMD(2)).GetContent()
 	btn1 := aButton().SetType("submit").
 		SetContent(language.GetFromHtml("Save")).
 		SetThemePrimary().
 		SetOrientationRight().
-		SetLoadingText(`<i class='fa fa-spinner fa-spin '></i> Save`).
 		GetContent()
 	btn2 := aButton().SetType("reset").
 		SetContent(language.GetFromHtml("Reset")).
 		SetThemeWarning().
 		SetOrientationLeft().
 		GetContent()
-	col2 := aCol().SetSize(map[string]string{"md": "8"}).
+	col2 := aCol().SetSize(types.SizeMD(8)).
 		SetContent(btn1 + btn2).GetContent()
 	return col1 + col2
 }
 
 func filterFormFooter(infoUrl string) template2.HTML {
-	col1 := aCol().SetSize(map[string]string{"md": "2"}).GetContent()
+	col1 := aCol().SetSize(types.SizeMD(2)).GetContent()
 	btn1 := aButton().SetType("submit").
-		SetContent(`<i class="fa fa-search"></i>&nbsp;&nbsp;` + language.GetFromHtml("search")).
+		SetContent(icon.Icon(icon.Search, 2) + language.GetFromHtml("search")).
 		SetThemePrimary().
 		SetSmallSize().
 		SetOrientationLeft().
-		SetLoadingText(`<i class='fa fa-spinner fa-spin '></i> ` + language.GetFromHtml("search")).
+		SetLoadingText(icon.Icon(icon.Spinner, 1) + language.GetFromHtml("search")).
 		GetContent()
 	btn2 := aButton().SetType("reset").
-		SetContent(`<i class="fa fa-undo"></i>&nbsp;&nbsp;` + language.GetFromHtml("reset")).
+		SetContent(icon.Icon(icon.Undo, 2) + language.GetFromHtml("reset")).
 		SetThemeDefault().
 		SetOrientationLeft().
 		SetSmallSize().
 		SetHref(infoUrl).
 		SetMarginLeft(12).
 		GetContent()
-	col2 := aCol().SetSize(map[string]string{"md": "8"}).
+	col2 := aCol().SetSize(types.SizeMD(8)).
 		SetContent(btn1 + btn2).GetContent()
 	return col1 + col2
 }

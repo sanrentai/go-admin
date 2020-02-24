@@ -18,6 +18,7 @@ import (
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/context"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -126,6 +127,11 @@ func (bee *Beego) Path() string {
 
 func (bee *Beego) Method() string {
 	return bee.ctx.Request.Method
+}
+
+func (bee *Beego) FormParam() url.Values {
+	_ = bee.ctx.Request.ParseMultipartForm(32 << 20)
+	return bee.ctx.Request.PostForm
 }
 
 func (bee *Beego) PjaxHeader() string {

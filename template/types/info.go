@@ -2,15 +2,17 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/db"
+	"github.com/GoAdminGroup/go-admin/modules/logger"
 	"github.com/GoAdminGroup/go-admin/modules/utils"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/parameter"
 	"github.com/GoAdminGroup/go-admin/template/types/form"
 	"github.com/GoAdminGroup/go-admin/template/types/table"
 	"html"
 	"html/template"
+	"net/http"
 	"strconv"
 	"strings"
 )
@@ -59,221 +61,6 @@ type FieldFilterFn func(value FieldModel) interface{}
 // PostFieldFilterFn is filter function of data.
 type PostFieldFilterFn func(value PostFieldModel) interface{}
 
-type DisplayProcessFn func(string) string
-
-type DisplayProcessFnChains []DisplayProcessFn
-
-func (d DisplayProcessFnChains) Valid() bool {
-	return len(d) > 0
-}
-
-func (d DisplayProcessFnChains) Add(f DisplayProcessFn) DisplayProcessFnChains {
-	return append(d, f)
-}
-
-func (d DisplayProcessFnChains) Append(f DisplayProcessFnChains) DisplayProcessFnChains {
-	return append(d, f...)
-}
-
-func (d DisplayProcessFnChains) Copy() DisplayProcessFnChains {
-	if len(d) == 0 {
-		return make(DisplayProcessFnChains, 0)
-	} else {
-		var newDisplayProcessFnChains = make(DisplayProcessFnChains, len(d))
-		copy(newDisplayProcessFnChains, d)
-		return newDisplayProcessFnChains
-	}
-}
-
-func chooseDisplayProcessChains(internal DisplayProcessFnChains) DisplayProcessFnChains {
-	if len(internal) > 0 {
-		return internal
-	}
-	return globalDisplayProcessChains.Copy()
-}
-
-var globalDisplayProcessChains = make(DisplayProcessFnChains, 0)
-
-func AddGlobalDisplayProcessFn(f DisplayProcessFn) {
-	globalDisplayProcessChains = globalDisplayProcessChains.Add(f)
-}
-
-func AddLimit(limit int) DisplayProcessFnChains {
-	return addLimit(limit, globalDisplayProcessChains)
-}
-
-func AddTrimSpace() DisplayProcessFnChains {
-	return addTrimSpace(globalDisplayProcessChains)
-}
-
-func AddSubstr(start int, end int) DisplayProcessFnChains {
-	return addSubstr(start, end, globalDisplayProcessChains)
-}
-
-func AddToTitle() DisplayProcessFnChains {
-	return addToTitle(globalDisplayProcessChains)
-}
-
-func AddToUpper() DisplayProcessFnChains {
-	return addToUpper(globalDisplayProcessChains)
-}
-
-func AddToLower() DisplayProcessFnChains {
-	return addToLower(globalDisplayProcessChains)
-}
-
-func AddXssFilter() DisplayProcessFnChains {
-	return addXssFilter(globalDisplayProcessChains)
-}
-
-func AddXssJsFilter() DisplayProcessFnChains {
-	return addXssJsFilter(globalDisplayProcessChains)
-}
-
-func addLimit(limit int, chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		if limit > len(value) {
-			return value
-		} else if limit < 0 {
-			return ""
-		} else {
-			return value[:limit]
-		}
-	})
-	return chains
-}
-
-func addTrimSpace(chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		return strings.TrimSpace(value)
-	})
-	return chains
-}
-
-func addSubstr(start int, end int, chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		if start > end || start > len(value) || end < 0 {
-			return ""
-		}
-		if start < 0 {
-			start = 0
-		}
-		if end > len(value) {
-			end = len(value)
-		}
-		return value[start:end]
-	})
-	return chains
-}
-
-func addToTitle(chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		return strings.Title(value)
-	})
-	return chains
-}
-
-func addToUpper(chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		return strings.ToUpper(value)
-	})
-	return chains
-}
-
-func addToLower(chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		return strings.ToLower(value)
-	})
-	return chains
-}
-
-func addXssFilter(chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		return html.EscapeString(value)
-	})
-	return chains
-}
-
-func addXssJsFilter(chains DisplayProcessFnChains) DisplayProcessFnChains {
-	chains = chains.Add(func(value string) string {
-		s := strings.Replace(value, "<script>", "&lt;script&gt;", -1)
-		return strings.Replace(s, "</script>", "&lt;/script&gt;", -1)
-	})
-	return chains
-}
-
-type FieldDisplay struct {
-	Display              FieldFilterFn
-	DisplayProcessChains DisplayProcessFnChains
-}
-
-func (f FieldDisplay) ToDisplay(value FieldModel) interface{} {
-	val := f.Display(value)
-
-	if _, ok := val.(template.HTML); !ok {
-		if _, ok2 := val.([]string); !ok2 {
-			valStr := fmt.Sprintf("%v", val)
-			for _, process := range f.DisplayProcessChains {
-				valStr = process(valStr)
-			}
-			return valStr
-		}
-	}
-
-	return val
-}
-
-func (f FieldDisplay) AddLimit(limit int) DisplayProcessFnChains {
-	return f.DisplayProcessChains.Add(func(value string) string {
-		if limit > len(value) {
-			return value
-		} else if limit < 0 {
-			return ""
-		} else {
-			return value[:limit]
-		}
-	})
-}
-
-func (f FieldDisplay) AddTrimSpace() DisplayProcessFnChains {
-	return f.DisplayProcessChains.Add(func(value string) string {
-		return strings.TrimSpace(value)
-	})
-}
-
-func (f FieldDisplay) AddSubstr(start int, end int) DisplayProcessFnChains {
-	return f.DisplayProcessChains.Add(func(value string) string {
-		if start > end || start > len(value) || end < 0 {
-			return ""
-		}
-		if start < 0 {
-			start = 0
-		}
-		if end > len(value) {
-			end = len(value)
-		}
-		return value[start:end]
-	})
-}
-
-func (f FieldDisplay) AddToTitle() DisplayProcessFnChains {
-	return f.DisplayProcessChains.Add(func(value string) string {
-		return strings.Title(value)
-	})
-}
-
-func (f FieldDisplay) AddToUpper() DisplayProcessFnChains {
-	return f.DisplayProcessChains.Add(func(value string) string {
-		return strings.ToUpper(value)
-	})
-}
-
-func (f FieldDisplay) AddToLower() DisplayProcessFnChains {
-	return f.DisplayProcessChains.Add(func(value string) string {
-		return strings.ToLower(value)
-	})
-}
-
 // Field is the table field.
 type Field struct {
 	Head     string
@@ -303,6 +90,49 @@ type Field struct {
 	FieldDisplay
 }
 
+func (f Field) FilterFormField(params parameter.Parameters, headField string) []FormField {
+	var value, value2 string
+
+	if f.FilterType.IsRange() {
+		value = params.GetFilterFieldValueStart(headField)
+		value2 = params.GetFilterFieldValueEnd(headField)
+	} else {
+		if f.FilterOperator == FilterOperatorFree {
+			value2 = GetOperatorFromValue(params.GetFieldOperator(headField)).String()
+		}
+		value = params.GetFieldValue(headField)
+	}
+
+	var filterForm = make([]FormField, 0)
+
+	filterForm = append(filterForm, FormField{
+		Field:     headField,
+		Head:      modules.AorB(f.FilterHead == "", f.Head, f.FilterHead),
+		TypeName:  f.TypeName,
+		HelpMsg:   f.FilterHelpMsg,
+		FormType:  f.FilterType,
+		Editable:  true,
+		Value:     template.HTML(value),
+		Value2:    value2,
+		Options:   f.FilterOptions.SetSelected(params.GetFieldValue(f.Field), f.FilterType.SelectedLabel()),
+		OptionExt: f.FilterOptionExt,
+		Label:     f.FilterOperator.Label(),
+	})
+
+	if f.FilterOperator.AddOrNot() {
+		filterForm = append(filterForm, FormField{
+			Field:    headField + parameter.FilterParamOperatorSuffix,
+			Head:     f.Head,
+			TypeName: f.TypeName,
+			Value:    template.HTML(f.FilterOperator.Value()),
+			FormType: f.FilterType,
+			Hide:     true,
+		})
+	}
+
+	return filterForm
+}
+
 func (f Field) GetEditOptions() string {
 	if len(f.EditOptions) == 0 {
 		return ""
@@ -321,6 +151,125 @@ func (f Field) Exist() bool {
 }
 
 type FieldList []Field
+
+type TableInfo struct {
+	Table      string
+	PrimaryKey string
+	Delimiter  string
+	Driver     string
+}
+
+func (f FieldList) GetTheadAndFilterForm(info TableInfo, params parameter.Parameters, columns []string) ([]map[string]string,
+	string, string, []string, []FormField) {
+	var (
+		thead      = make([]map[string]string, 0)
+		fields     = ""
+		joins      = ""
+		joinTables = make([]string, 0)
+		filterForm = make([]FormField, 0)
+	)
+	for _, field := range f {
+		if field.Field != info.PrimaryKey && modules.InArray(columns, field.Field) &&
+			!field.Join.Valid() {
+			fields += info.Table + "." + modules.FilterField(field.Field, info.Delimiter) + ","
+		}
+
+		headField := field.Field
+
+		if field.Join.Valid() {
+			headField = field.Join.Table + "_goadmin_join_" + field.Field
+			fields += db.GetAggregationExpression(info.Driver, field.Join.Table+"."+
+				modules.FilterField(field.Field, info.Delimiter), headField, JoinFieldValueDelimiter) + ","
+			if !modules.InArray(joinTables, field.Join.Table) {
+				joinTables = append(joinTables, field.Join.Table)
+				joins += " left join " + modules.FilterField(field.Join.Table, info.Delimiter) + " on " +
+					field.Join.Table + "." + modules.FilterField(field.Join.JoinField, info.Delimiter) + " = " +
+					info.Table + "." + modules.FilterField(field.Join.Field, info.Delimiter)
+			}
+		}
+
+		if field.Filterable {
+			filterForm = append(filterForm, field.FilterFormField(params, headField)...)
+		}
+
+		if field.Hide {
+			continue
+		}
+		thead = append(thead, map[string]string{
+			"head":       field.Head,
+			"sortable":   modules.AorB(field.Sortable, "1", "0"),
+			"field":      headField,
+			"hide":       modules.AorB(modules.InArrayWithoutEmpty(params.Columns, headField), "0", "1"),
+			"editable":   modules.AorB(field.EditAble, "true", "false"),
+			"edittype":   field.EditType.String(),
+			"editoption": field.GetEditOptions(),
+			"width":      strconv.Itoa(field.Width),
+		})
+	}
+
+	return thead, fields, joins, joinTables, filterForm
+}
+
+func (f FieldList) GetThead(info TableInfo, params parameter.Parameters, columns []string) ([]map[string]string, string, string) {
+	var (
+		thead      = make([]map[string]string, 0)
+		fields     = ""
+		joins      = ""
+		joinTables = make([]string, 0)
+	)
+	for _, field := range f {
+		if field.Field != info.PrimaryKey && modules.InArray(columns, field.Field) &&
+			!field.Join.Valid() {
+			fields += info.Table + "." + modules.FilterField(field.Field, info.Delimiter) + ","
+		}
+
+		headField := field.Field
+
+		if field.Join.Valid() {
+			headField = field.Join.Table + "_goadmin_join_" + field.Field
+			fields += db.GetAggregationExpression(info.Driver, field.Join.Table+"."+
+				modules.FilterField(field.Field, info.Delimiter), headField, JoinFieldValueDelimiter) + ","
+			if !modules.InArray(joinTables, field.Join.Table) {
+				joinTables = append(joinTables, field.Join.Table)
+				joins += " left join " + modules.FilterField(field.Join.Table, info.Delimiter) + " on " +
+					field.Join.Table + "." + modules.FilterField(field.Join.JoinField, info.Delimiter) + " = " +
+					info.Table + "." + modules.FilterField(field.Join.Field, info.Delimiter)
+			}
+		}
+
+		if field.Hide {
+			continue
+		}
+		thead = append(thead, map[string]string{
+			"head":       field.Head,
+			"sortable":   modules.AorB(field.Sortable, "1", "0"),
+			"field":      headField,
+			"hide":       modules.AorB(modules.InArrayWithoutEmpty(params.Columns, headField), "0", "1"),
+			"editable":   modules.AorB(field.EditAble, "true", "false"),
+			"edittype":   field.EditType.String(),
+			"editoption": field.GetEditOptions(),
+			"width":      strconv.Itoa(field.Width),
+		})
+	}
+
+	return thead, fields, joins
+}
+
+func (f FieldList) GetFieldFilterProcessValue(key string, value string) string {
+	field := f.GetFieldByFieldName(key)
+	if field.FilterProcess != nil {
+		value = field.FilterProcess(value)
+	}
+	return value
+}
+
+func (f FieldList) GetFieldJoinTable(key string) string {
+	field := f.GetFieldByFieldName(key)
+	if field.Exist() {
+		return field.Join.Table
+	}
+	return ""
+}
 
 func (f FieldList) GetFieldByFieldName(name string) Field {
 	for _, field := range f {
@@ -405,12 +354,14 @@ type InfoPanel struct {
 	IsHideFilterArea   bool
 	FilterFormLayout   form.Layout
 
-	Wheres    []Where
+	Wheres    Wheres
 	WhereRaws WhereRaw
 
 	Callbacks Callbacks
 
 	Buttons Buttons
+
+	TableLayout string
 
 	DeleteHook  DeleteFn
 	PreDeleteFn DeleteFn
@@ -433,9 +384,128 @@ type Where struct {
 	Arg      interface{}
 }
 
+type Wheres []Where
+
+func (whs Wheres) Statement(wheres, delimiter string, whereArgs []interface{}, existKeys, columns []string) (string, []interface{}) {
+	for k, wh := range whs {
+
+		whFieldArr := strings.Split(wh.Field, ".")
+		whField := ""
+		whTable := ""
+		if len(whFieldArr) > 1 {
+			whField = whFieldArr[1]
+			whTable = whFieldArr[0]
+		} else {
+			whField = whFieldArr[0]
+		}
+
+		if modules.InArray(existKeys, whField) {
+			continue
+		}
+
+		// TODO: support like operation and join table
+		if modules.InArray(columns, whField) {
+
+			joinMark := ""
+			if k != len(whs)-1 {
+				joinMark = whs[k+1].Join
+			}
+
+			if whTable != "" {
+				wheres += whTable + "." + modules.FilterField(whField, delimiter) + " " + wh.Operator + " ? " + joinMark + " "
+			} else {
+				wheres += modules.FilterField(whField, delimiter) + " " + wh.Operator + " ? " + joinMark + " "
+			}
+			whereArgs = append(whereArgs, wh.Arg)
+		}
+	}
+	return wheres, whereArgs
+}
+
 type WhereRaw struct {
 	Raw  string
 	Args []interface{}
+}
+
+func (wh WhereRaw) check() int {
+	index := 0
+	for i := 0; i < len(wh.Raw); i++ {
+		if wh.Raw[i] == ' ' {
+			continue
+		} else {
+			if wh.Raw[i] == 'a' {
+				if len(wh.Raw) < i+3 {
+					break
+				} else {
+					if wh.Raw[i+1] == 'n' && wh.Raw[i+2] == 'd' {
+						index = i + 3
+					}
+				}
+			} else if wh.Raw[i] == 'o' {
+				if len(wh.Raw) < i+2 {
+					break
+				} else {
+					if wh.Raw[i+1] == 'r' {
+						index = i + 2
+					}
+				}
+			} else {
+				break
+			}
+		}
+	}
+	return index
+}
+
+func (wh WhereRaw) Statement(wheres string, whereArgs []interface{}) (string, []interface{}) {
+
+	if wh.Raw == "" {
+		return wheres, whereArgs
+	}
+
+	if wheres != "" {
+		if wh.check() != 0 {
+			wheres += wh.Raw + " "
+		} else {
+			wheres += " and " + wh.Raw + " "
+		}
+
+		whereArgs = append(whereArgs, wh.Args...)
+	} else {
+		wheres += wh.Raw[wh.check():] + " "
+		whereArgs = append(whereArgs, wh.Args...)
+	}
+
+	return wheres, whereArgs
+}
+
+type Handler func(ctx *context.Context) (success bool, msg string, data interface{})
+
+func (h Handler) Wrap() context.Handler {
+	return func(ctx *context.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				logger.Error(err)
+				ctx.JSON(http.StatusInternalServerError, map[string]interface{}{
+					"code": 500,
+					"data": "",
+					"msg":  "error",
+				})
+			}
+		}()
+
+		code := 0
+		s, m, d := h(ctx)
+
+		if !s {
+			code = 500
+		}
+		ctx.JSON(http.StatusOK, map[string]interface{}{
+			"code": code,
+			"data": d,
+			"msg":  m,
+		})
+	}
 }
 
 type Action interface {
@@ -464,69 +534,7 @@ func (def *DefaultAction) BtnClass() template.HTML     { return "" }
 func (def *DefaultAction) ExtContent() template.HTML   { return def.Ext }
 func (def *DefaultAction) GetCallbacks() context.Node  { return context.Node{} }
 
-type Button interface {
-	Content() (template.HTML, template.JS)
-}
-
-type DefaultButton struct {
-	Id        string
-	Title     template.HTML
-	Color     template.HTML
-	TextColor template.HTML
-	Action    Action
-	Icon      string
-}
-
-func (b DefaultButton) Content() (template.HTML, template.JS) {
-
-	color := template.HTML("")
-	if b.Color != template.HTML("") {
-		color = template.HTML(`background-color:`) + b.Color + template.HTML(`;`)
-	}
-	textColor := template.HTML("")
-	if b.TextColor != template.HTML("") {
-		textColor = template.HTML(`color:`) + b.TextColor + template.HTML(`;`)
-	}
-
-	style := template.HTML("")
-	addColor := color + textColor
-
-	if addColor != template.HTML("") {
-		style = template.HTML(`style="`) + addColor + template.HTML(`"`)
-	}
-
-	h := `<div class="btn-group pull-right" style="margin-right: 10px">
-                <a ` + style + ` class="` + template.HTML(b.Id) + ` btn btn-sm btn-default ` + b.Action.BtnClass() + `" ` + b.Action.BtnAttribute() + `>
-                    <i class="fa ` + template.HTML(b.Icon) + `"></i>&nbsp;&nbsp;` + b.Title + `
-                </a>
-        </div>` + b.Action.ExtContent()
-	return h, b.Action.Js()
-}
-
-type ActionButton struct {
-	Id     string
-	Title  template.HTML
-	Action Action
-}
-
-func (b ActionButton) Content() (template.HTML, template.JS) {
-	h := template.HTML(`<li style="cursor: pointer;"><a data-id="{%id}" class="`+template.HTML(b.Id)+`" `+b.Action.BtnAttribute()+`>`+b.Title+`</a></li>`) + b.Action.ExtContent()
-	return h, b.Action.Js()
-}
-
-type Buttons []Button
-
-func (b Buttons) Content() (template.HTML, template.JS) {
-	h := template.HTML("")
-	j := template.JS("")
-
-	for _, btn := range b {
-		hh, jj := btn.Content()
-		h += hh
-		j += jj
-	}
-	return h, j
-}
+var _ Action = (*DefaultAction)(nil)
 
 var DefaultPageSizeList = []int{10, 20, 30, 50, 100}
 
@@ -543,6 +551,7 @@ func NewInfoPanel(pk string) *InfoPanel {
 		Wheres:            make([]Where, 0),
 		WhereRaws:         WhereRaw{},
 		SortField:         pk,
+		TableLayout:       "auto",
 	}
 }
 
@@ -664,6 +673,11 @@ func (i *InfoPanel) SetGetDataFn(fn GetDataFn) *InfoPanel {
 	return i
 }
 
+func (i *InfoPanel) SetTableFixed() *InfoPanel {
+	i.TableLayout = "fixed"
+	return i
+}
+
 func (i *InfoPanel) AddField(head, field string, typeName db.DatabaseType) *InfoPanel {
 	i.FieldList = append(i.FieldList, Field{
 		Head:     head,
@@ -724,90 +738,6 @@ type FilterType struct {
 	Operator FilterOperator
 	Head     string
 	HelpMsg  template.HTML
-}
-
-type FilterOperator string
-
-const (
-	FilterOperatorLike           FilterOperator = "like"
-	FilterOperatorGreater        FilterOperator = ">"
-	FilterOperatorGreaterOrEqual FilterOperator = ">="
-	FilterOperatorEqual          FilterOperator = "="
-	FilterOperatorNotEqual       FilterOperator = "!="
-	FilterOperatorLess           FilterOperator = "<"
-	FilterOperatorLessOrEqual    FilterOperator = "<="
-	FilterOperatorFree           FilterOperator = "free"
-)
-
-func GetOperatorFromValue(value string) FilterOperator {
-	switch value {
-	case "like":
-		return FilterOperatorLike
-	case "gr":
-		return FilterOperatorGreater
-	case "gq":
-		return FilterOperatorGreaterOrEqual
-	case "eq":
-		return FilterOperatorEqual
-	case "ne":
-		return FilterOperatorNotEqual
-	case "le":
-		return FilterOperatorLess
-	case "lq":
-		return FilterOperatorLessOrEqual
-	case "free":
-		return FilterOperatorFree
-	default:
-		return FilterOperatorEqual
-	}
-}
-
-func (o FilterOperator) Value() string {
-	switch o {
-	case FilterOperatorLike:
-		return "like"
-	case FilterOperatorGreater:
-		return "gr"
-	case FilterOperatorGreaterOrEqual:
-		return "gq"
-	case FilterOperatorEqual:
-		return "eq"
-	case FilterOperatorNotEqual:
-		return "ne"
-	case FilterOperatorLess:
-		return "le"
-	case FilterOperatorLessOrEqual:
-		return "lq"
-	case FilterOperatorFree:
-		return "free"
-	default:
-		return "eq"
-	}
-}
-
-func (o FilterOperator) String() string {
-	return string(o)
-}
-
-func (o FilterOperator) Label() template.HTML {
-	if o == FilterOperatorLike {
-		return ""
-	}
-	return template.HTML(o)
-}
-
-func (o FilterOperator) AddOrNot() bool {
-	return string(o) != "" && o != FilterOperatorFree
-}
-
-func (o FilterOperator) Valid() bool {
-	switch o {
-	case FilterOperatorLike, FilterOperatorGreater, FilterOperatorGreaterOrEqual,
-		FilterOperatorLess, FilterOperatorLessOrEqual, FilterOperatorFree:
-		return true
-	default:
-		return false
-	}
 }
 
 func (i *InfoPanel) FieldFilterable(filterType ...FilterType) *InfoPanel {

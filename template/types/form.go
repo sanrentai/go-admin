@@ -2,12 +2,16 @@ package types
 
 import (
 	"encoding/json"
+	"github.com/GoAdminGroup/go-admin/context"
+	"github.com/GoAdminGroup/go-admin/modules/constant"
 	"github.com/GoAdminGroup/go-admin/modules/db"
-	"github.com/GoAdminGroup/go-admin/plugins/admin/modules"
+	"github.com/GoAdminGroup/go-admin/modules/utils"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/form"
 	form2 "github.com/GoAdminGroup/go-admin/template/types/form"
 	"html"
 	"html/template"
+	"strconv"
+	"strings"
 )
 
 type FieldOptions []map[string]string
@@ -16,7 +20,7 @@ func (fo FieldOptions) SetSelected(val interface{}, labels []string) FieldOption
 
 	if valArr, ok := val.([]string); ok {
 		for _, v := range fo {
-			if modules.InArray(valArr, v["value"]) {
+			if utils.InArray(valArr, v["value"]) || utils.InArray(valArr, v["field"]) {
 				v["selected"] = labels[0]
 			} else {
 				v["selected"] = labels[1]
@@ -24,7 +28,7 @@ func (fo FieldOptions) SetSelected(val interface{}, labels []string) FieldOption
 		}
 	} else {
 		for _, v := range fo {
-			if v["value"] == val {
+			if v["value"] == val || v["field"] == val {
 				v["selected"] = labels[0]
 			} else {
 				v["selected"] = labels[1]
@@ -87,6 +91,14 @@ func (f FormField) UpdateValue(id, val string, res map[string]interface{}) FormF
 	return f
 }
 
+func (f FormField) UpdateDefaultValue() FormField {
+	f.Value = f.Default
+	if f.FormType.IsSelect() {
+		f.Options.SetSelected(string(f.Value), f.FormType.SelectedLabel())
+	}
+	return f
+}
+
 // FormPanel
 type FormPanel struct {
 	FieldList         FormFields
@@ -100,8 +112,9 @@ type FormPanel struct {
 	Title       string
 	Description string
 
-	Validator FormPostFn
-	PostHook  FormPostFn
+	Validator    FormPostFn
+	PostHook     FormPostFn
+	PreProcessFn FormPreProcessFn
 
 	Callbacks Callbacks
 
@@ -210,7 +223,22 @@ func (f *FormPanel) FieldHelpMsg(s template.HTML) *FormPanel {
 
 func (f *FormPanel) FieldOptionExt(m map[string]interface{}) *FormPanel {
 	s, _ := json.Marshal(m)
-	f.FieldList[f.curFieldListIndex].OptionExt = template.JS(s)
+
+	if f.FieldList[f.curFieldListIndex].OptionExt != template.JS("") {
+		ss := string(f.FieldList[f.curFieldListIndex].OptionExt)
+		ss = strings.Replace(ss, "}", ",", strings.Count(ss, "}"))
+		ss = strings.TrimRight(ss, " ")
+		ss += ","
+		f.FieldList[f.curFieldListIndex].OptionExt = template.JS(ss) + template.JS(strings.Replace(string(s), "{", "", 1))
+	} else {
+		f.FieldList[f.curFieldListIndex].OptionExt = template.JS(string(s))
+	}
+
+	return f
+}
+
+func (f *FormPanel) FieldOptionExtJS(js template.JS) *FormPanel {
+	f.FieldList[f.curFieldListIndex].OptionExt = js
 	return f
 }
 
@@ -307,6 +335,228 @@ func (f *FormPanel) FieldCustomCss(css template.CSS) *FormPanel {
 	return f
 }
 
+func (f *FormPanel) FieldOnSearch(url string, handler Handler, delay ...int) *FormPanel {
+
+	delayStr := "500"
+	if len(delay) > 0 {
+		delayStr = strconv.Itoa(delay[0])
+	}
+
+	if f.FieldList[f.curFieldListIndex].OptionExt != template.JS("") {
+		s := string(f.FieldList[f.curFieldListIndex].OptionExt)
+		s = strings.Replace(s, "{", "", 1)
+		s = utils.ReplaceNth(s, "}", "", strings.Count(s, "}"))
+		s = strings.TrimRight(s, " ")
+		s += ","
+		f.FieldList[f.curFieldListIndex].OptionExt = template.JS(s)
+	}
+
+	f.FieldList[f.curFieldListIndex].OptionExt = `{
+		` + f.FieldList[f.curFieldListIndex].OptionExt + template.JS(`
+		ajax: {
+		    url: "` + url + `",
+		    dataType: 'json',
+		    data: function (params) {
+			      var query = {
+			        	search: params.term,
+						page: params.page || 1
+			      }
+			      return query;
+		    },
+		    delay: ` + delayStr + `,
+		    processResults: function (data, params) {
+			      return data.data;
+	    	}
+	  	}
+	}`)
+
+	f.Callbacks = append(f.Callbacks, context.Node{
+		Path:     url,
+		Method:   "get",
+		Handlers: context.Handlers{handler.Wrap()},
+		Value:    map[string]interface{}{constant.ContextNodeNeedAuth: 1},
+	})
+
+	return f
+}
+
+func (f *FormPanel) FieldOnChooseCustom(js template.HTML) *FormPanel {
+	f.FooterHtml += `<script>
+$(".` + template.HTML(f.FieldList[f.curFieldListIndex].Field) + `").on("select2:select",function(e){
+	` + js + `
+})
+</script>`
+	return f
+}
+
+type LinkField struct {
+	Field   string
+	Value   template.HTML
+	Hide    bool
+	Disable bool
+}
+
+func (f *FormPanel) FieldOnChooseMap(m map[string]LinkField) *FormPanel {
+
+	cm := template.HTML("")
+
+	for val, obejct := range m {
+		if obejct.Hide {
+			cm += `if (e.params.data.text === "` + template.HTML(val) + `") {
+		$("label[for='` + template.HTML(obejct.Field) + `']").parent().hide()
+	} else {
+		$("label[for='` + template.HTML(obejct.Field) + `']").parent().show()
+	}`
+		} else if obejct.Disable {
+			cm += `if (e.params.data.text === "` + template.HTML(val) + `") {
+		$("#` + template.HTML(obejct.Field) + `").prop('disabled', true);
+	} else {
+		$("#` + template.HTML(obejct.Field) + `").prop('disabled', false);
+	}`
+		} else {
+			cm += `if (e.params.data.text === "` + template.HTML(val) + `") {
+		if ($(".` + template.HTML(obejct.Field) + `").length > 0) {
+			$(".` + template.HTML(obejct.Field) + `").val("` + obejct.Value + `").select2()
+		} else {
+			$("#` + template.HTML(obejct.Field) + `").val("` + obejct.Value + `")
+		}	
+	}`
+		}
+	}
+
+	f.FooterHtml += `<script>
+$(".` + template.HTML(f.FieldList[f.curFieldListIndex].Field) + `").on("select2:select",function(e){
+	` + cm + `
+})
+</script>`
+	return f
+}
+
+func (f *FormPanel) FieldOnChoose(val, field string, value template.HTML) *FormPanel {
+	f.FooterHtml += `<script>
+$(".` + template.HTML(f.FieldList[f.curFieldListIndex].Field) + `").on("select2:select",function(e){
+	if (e.params.data.text === "` + template.HTML(val) + `") {
+		if ($(".` + template.HTML(field) + `").length > 0) {
+			$(".` + template.HTML(field) + `").val("` + value + `").select2()
+		} else {
+			$("#` + template.HTML(field) + `").val("` + value + `")
+		}	
+	}
+})
+</script>`
+	return f
+}
+
+func (f *FormPanel) FieldOnChooseAjax(field, url string, handler Handler) *FormPanel {
+
+	f.FooterHtml += `<script>
+$(".` + template.HTML(f.FieldList[f.curFieldListIndex].Field) + `").on("select2:select",function(e){
+	let id = '` + template.HTML(field) + `'
+	let selectObj = $("."+id)
+	if (selectObj.length > 0) {
+		selectObj.val("").select2()
+		selectObj.html('<option value="" selected="selected"></option>')
+	}
+	$.ajax({
+		url:"` + template.HTML(url) + `",
+		type: 'post',
+		dataType: 'text',
+		data: {
+			'value':$(this).val()
+		},
+		success: function (data)  {
+			if (typeof (data) === "string") {
+				data = JSON.parse(data);
+			}
+			if (data.code === 0) {
+				if (selectObj.length > 0) {
+					if (typeof(data.data) === "object") {
+						$('.' + id).select2({
+							data: data.data
+						});
+					} else {
+						$('.' + id).val(data.data).select2()
+					}
+				} else {
+					$('#` + template.HTML(field) + `').val(data.data);
+				}
+			} else {
+				swal(data.msg, '', 'error');
+			}
+		},
+		error:function(){
+			alert('error')
+		}
+	})
+})
+</script>`
+
+	f.Callbacks = append(f.Callbacks, context.Node{
+		Path:     url,
+		Method:   "post",
+		Handlers: context.Handlers{handler.Wrap()},
+		Value:    map[string]interface{}{constant.ContextNodeNeedAuth: 1},
+	})
+
+	return f
+}
+
+func (f *FormPanel) FieldOnChooseHide(value string, field ...string) *FormPanel {
+
+	if len(field) == 0 {
+		return f
+	}
+
+	hideText := template.HTML("")
+	showText := template.HTML("")
+
+	for _, f := range field {
+		hideText += `$("label[for='` + template.HTML(f) + `']").parent().hide()
+`
+		showText += `$("label[for='` + template.HTML(f) + `']").parent().show()
+`
+	}
+
+	f.FooterHtml += `<script>
+$(".` + template.HTML(f.FieldList[f.curFieldListIndex].Field) + `").on("select2:select",function(e){
+	if (e.params.data.text === "` + template.HTML(value) + `") {
+		` + hideText + `
+	} else {
+		` + showText + `
+	}
+})
+</script>`
+	return f
+}
+
+func (f *FormPanel) FieldOnChooseDisable(value string, field ...string) *FormPanel {
+
+	if len(field) == 0 {
+		return f
+	}
+
+	disableText := template.HTML("")
+	enableText := template.HTML("")
+
+	for _, f := range field {
+		disableText += `$("#` + template.HTML(f) + `").prop('disabled', true);
+`
+		enableText += `$("#` + template.HTML(f) + `").prop('disabled', false);
+`
+	}
+
+	f.FooterHtml += `<script>
+$(".` + template.HTML(f.FieldList[f.curFieldListIndex].Field) + `").on("select2:select",function(e){
+	if (e.params.data.text === "` + template.HTML(value) + `") {
+		` + disableText + `
+	} else {
+		` + enableText + `
+	}
+})
+</script>`
+	return f
+}
+
 // FormPanel attribute setting functions
 // ====================================================
 
@@ -331,12 +581,12 @@ func (f *FormPanel) SetDescription(desc string) *FormPanel {
 }
 
 func (f *FormPanel) SetHeaderHtml(header template.HTML) *FormPanel {
-	f.HeaderHtml = header
+	f.HeaderHtml += header
 	return f
 }
 
 func (f *FormPanel) SetFooterHtml(footer template.HTML) *FormPanel {
-	f.FooterHtml = footer
+	f.FooterHtml += footer
 	return f
 }
 
@@ -345,20 +595,27 @@ func (f *FormPanel) SetPostValidator(va FormPostFn) *FormPanel {
 	return f
 }
 
-func (f *FormPanel) SetPostHook(po FormPostFn) *FormPanel {
-	f.PostHook = po
+func (f *FormPanel) SetPreProcessFn(fn FormPreProcessFn) *FormPanel {
+	f.PreProcessFn = fn
 	return f
 }
 
-func (f *FormPanel) SetUpdateFn(po FormPostFn) *FormPanel {
-	f.UpdateFn = po
+func (f *FormPanel) SetPostHook(fn FormPostFn) *FormPanel {
+	f.PostHook = fn
 	return f
 }
 
-func (f *FormPanel) SetInsertFn(po FormPostFn) *FormPanel {
-	f.InsertFn = po
+func (f *FormPanel) SetUpdateFn(fn FormPostFn) *FormPanel {
+	f.UpdateFn = fn
 	return f
 }
+
+func (f *FormPanel) SetInsertFn(fn FormPostFn) *FormPanel {
+	f.InsertFn = fn
+	return f
+}
+
+type FormPreProcessFn func(values form.Values) form.Values
 
 type FormPostFn func(values form.Values) error
 
@@ -370,7 +627,7 @@ func (f FormFields) Copy() FormFields {
 	for i := 0; i < len(formList); i++ {
 		formList[i].Options = make([]map[string]string, len(f[i].Options))
 		for j := 0; j < len(f[i].Options); j++ {
-			formList[i].Options[j] = modules.CopyMap(f[i].Options[j])
+			formList[i].Options[j] = utils.CopyMap(f[i].Options[j])
 		}
 	}
 	return formList

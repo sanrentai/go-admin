@@ -7,8 +7,8 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/GoAdminGroup/go-admin/modules/constant"
 	"github.com/GoAdminGroup/go-admin/modules/logger"
-	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
 	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v2"
 	"html/template"
@@ -178,6 +178,9 @@ type Config struct {
 
 	// Auth user table
 	AuthUserTable string `json:"auth_user_table",yaml:"auth_user_table",ini:"auth_user_table"`
+
+	// Extra config info
+	Extra map[string]interface{} `json:"extra",yaml:"extra",ini:"extra"`
 
 	prefix string
 }
