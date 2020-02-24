@@ -3,7 +3,6 @@ package controller
 import (
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/auth"
-	"github.com/GoAdminGroup/go-admin/modules/language"
 	"github.com/GoAdminGroup/go-admin/modules/logger"
 	"github.com/GoAdminGroup/go-admin/modules/menu"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
@@ -55,7 +54,7 @@ func GlobalDeferHandler(ctx *context.Context) {
 		}
 
 		alert := aAlert().
-			SetTitle(template2.HTML(`<i class="icon fa fa-warning"></i> ` + language.Get("error") + `!`)).
+			SetTitle(constant.DefaultErrorMsg).
 			SetTheme("warning").
 			SetContent(template2.HTML(errMsg)).
 			GetContent()
@@ -76,7 +75,7 @@ func GlobalDeferHandler(ctx *context.Context) {
 func setFormWithReturnErrMessage(ctx *context.Context, errMsg string, kind string) {
 
 	alert := aAlert().
-		SetTitle(template2.HTML(`<i class="icon fa fa-warning"></i> ` + language.Get("error") + `!`)).
+		SetTitle(constant.DefaultErrorMsg).
 		SetTheme("warning").
 		SetContent(template2.HTML(errMsg)).
 		GetContent()
@@ -86,8 +85,8 @@ func setFormWithReturnErrMessage(ctx *context.Context, errMsg string, kind strin
 		groupFormData      [][]types.FormField
 		groupHeaders       []string
 		title, description string
-		prefix             = ctx.Query("__prefix")
-		panel              = table.Get(prefix)
+		prefix             = ctx.Query(constant.PrefixKey)
+		panel              = table.Get(prefix, ctx)
 	)
 
 	if kind == "edit" {
@@ -95,7 +94,7 @@ func setFormWithReturnErrMessage(ctx *context.Context, errMsg string, kind strin
 		if id == "" {
 			id = ctx.Request.MultipartForm.Value[panel.GetPrimaryKey().Name][0]
 		}
-		formData, groupFormData, groupHeaders, title, description, _ = table.Get(prefix).GetDataWithId(id)
+		formData, groupFormData, groupHeaders, title, description, _ = table.Get(prefix, ctx).GetDataWithId(id)
 	} else {
 		formData, groupFormData, groupHeaders = table.GetNewFormList(panel.GetForm().TabHeaders, panel.GetForm().TabGroups,
 			panel.GetForm().FieldList)

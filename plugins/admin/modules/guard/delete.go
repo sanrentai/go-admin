@@ -3,6 +3,7 @@ package guard
 import (
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/db"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/table"
 )
 
@@ -15,8 +16,8 @@ type DeleteParam struct {
 func Delete(conn db.Connection) context.Handler {
 	return func(ctx *context.Context) {
 
-		prefix := ctx.Query("__prefix")
-		panel := table.Get(prefix)
+		prefix := ctx.Query(constant.PrefixKey)
+		panel := table.Get(prefix, ctx)
 		if !panel.GetDeletable() {
 			alert(ctx, panel, "operation not allow", conn)
 			ctx.Abort()

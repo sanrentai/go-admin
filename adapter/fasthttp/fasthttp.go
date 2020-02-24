@@ -195,6 +195,14 @@ func (fast *Fasthttp) Method() string {
 	return string(fast.ctx.Method())
 }
 
+func (fast *Fasthttp) FormParam() url.Values {
+	f, _ := fast.ctx.MultipartForm()
+	if f != nil {
+		return f.Value
+	}
+	return url.Values{}
+}
+
 func (fast *Fasthttp) PjaxHeader() string {
 	return string(fast.ctx.Request.Header.Peek(constant.PjaxHeader))
 }

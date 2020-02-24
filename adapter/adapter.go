@@ -17,7 +17,9 @@ import (
 	"github.com/GoAdminGroup/go-admin/plugins/admin/models"
 	"github.com/GoAdminGroup/go-admin/template"
 	"github.com/GoAdminGroup/go-admin/template/types"
+	"github.com/GoAdminGroup/html"
 	template2 "html/template"
+	"net/url"
 )
 
 // WebFrameWork is a interface which is used as an adapter of
@@ -33,6 +35,7 @@ type WebFrameWork interface {
 	GetCookie() (string, error)
 	Path() string
 	Method() string
+	FormParam() url.Values
 	PjaxHeader() string
 	Redirect()
 	SetContentType()
@@ -114,7 +117,7 @@ func (base *BaseAdapter) GetContent(ctx interface{}, getPanelFn types.GetPanelFn
 		err   error
 	)
 
-	if !auth.CheckPermissions(user, newBase.Path(), newBase.Method()) {
+	if !auth.CheckPermissions(user, newBase.Path(), newBase.Method(), newBase.FormParam()) {
 		alert := getErrorAlert("no permission")
 		errTitle := language.Get("error")
 
@@ -155,8 +158,9 @@ func (base *BaseAdapter) GetContent(ctx interface{}, getPanelFn types.GetPanelFn
 }
 
 func getErrorAlert(msg string) template2.HTML {
+
 	return template.Default().Alert().
-		SetTitle(template.HTML(`<i class="icon fa fa-warning"></i> ` + language.Get("error") + `!`)).
+		SetTitle(html.IEl().SetClass("icon fa fa-warning").Get() + template.HTML(` `+language.Get("error")+`!`)).
 		SetTheme("warning").
 		SetContent(template.HTML(msg)).
 		GetContent()

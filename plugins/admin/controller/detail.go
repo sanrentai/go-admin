@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/auth"
-	config2 "github.com/GoAdminGroup/go-admin/modules/config"
 	"github.com/GoAdminGroup/go-admin/modules/language"
 	"github.com/GoAdminGroup/go-admin/modules/menu"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/parameter"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/table"
 	"github.com/GoAdminGroup/go-admin/template"
@@ -18,9 +18,9 @@ import (
 )
 
 func ShowDetail(ctx *context.Context) {
-	prefix := ctx.Query("__prefix")
-	id := ctx.Query("__goadmin_detail_pk")
-	panel := table.Get(prefix)
+	prefix := ctx.Query(constant.PrefixKey)
+	id := ctx.Query(constant.DetailPKKey)
+	panel := table.Get(prefix, ctx)
 	user := auth.Auth(ctx)
 
 	newPanel := panel.Copy()
@@ -52,19 +52,24 @@ func ShowDetail(ctx *context.Context) {
 	var alert template2.HTML
 
 	if err != nil && alert == "" {
-		alert = aAlert().SetTitle(template2.HTML(`<i class="icon fa fa-warning"></i> ` + language.Get("error") + `!`)).
+		alert = aAlert().SetTitle(constant.DefaultErrorMsg).
 			SetTheme("warning").
 			SetContent(template2.HTML(err.Error())).
 			GetContent()
 	}
 
-	params := parameter.GetParam(ctx.Request.URL.Query(), panel.GetInfo().DefaultPageSize, panel.GetInfo().SortField,
-		panel.GetInfo().GetSort())
+	paramStr := parameter.GetParam(ctx.Request.URL.Query(),
+		panel.GetInfo().DefaultPageSize,
+		panel.GetInfo().SortField,
+		panel.GetInfo().GetSort()).GetRouteParamStr()
 
-	editUrl := modules.AorB(panel.GetEditable(), config.Url("/info/"+prefix+"/edit"+params.GetRouteParamStr())+"&__goadmin_edit_pk="+
-		ctx.Query("__goadmin_detail_pk"), "")
-	deleteUrl := modules.AorB(panel.GetDeletable(), config.Url("/delete/"+prefix), "")
-	infoUrl := config2.Get().Url("/info/" + prefix + params.GetRouteParamStr())
+	editUrl := modules.AorEmpty(panel.GetEditable(), routePathWithPrefix("show_edit", prefix)+paramStr+
+		"&"+constant.EditPKKey+"="+ctx.Query(constant.DetailPKKey))
+	deleteUrl := modules.AorEmpty(panel.GetDeletable(), routePathWithPrefix("delete", prefix)+paramStr)
+	infoUrl := routePathWithPrefix("info", prefix) + paramStr
+
+	editUrl = user.GetCheckPermissionByUrlMethod(editUrl, route("show_edit").Method())
+	deleteUrl = user.GetCheckPermissionByUrlMethod(deleteUrl, route("delete").Method())
 
 	deleteJs := ""
 

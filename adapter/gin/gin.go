@@ -17,6 +17,7 @@ import (
 	"github.com/GoAdminGroup/go-admin/template/types"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -131,6 +132,11 @@ func (gins *Gin) Path() string {
 
 func (gins *Gin) Method() string {
 	return gins.ctx.Request.Method
+}
+
+func (gins *Gin) FormParam() url.Values {
+	_ = gins.ctx.Request.ParseMultipartForm(32 << 20)
+	return gins.ctx.Request.PostForm
 }
 
 func (gins *Gin) PjaxHeader() string {
