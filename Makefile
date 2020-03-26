@@ -9,64 +9,92 @@ TEST_CONFIG_PATH=./../../common/config.json
 TEST_CONFIG_PQ_PATH=./../../common/config_pg.json
 TEST_CONFIG_SQLITE_PATH=./../../common/config_sqlite.json
 TEST_CONFIG_MS_PATH=./../../common/config_ms.json
-TEST_FRAMEWORK_DIR=./tests/frameworks
 
-all: test
+all: run
 
-## tests
+tmpl:
+	$(CLI) compile tpl
 
-test: cp-mod black-box-test web-test restore-mod
+fmt:
+	go fmt ./adapter/...
+	go fmt ./adm/...
+	go fmt ./context/...
+	go fmt ./engine/...
+	go fmt ./tests/...
+	go fmt ./examples/...
+	go fmt ./modules/...
+	go fmt ./plugins/...
+	go fmt ./template/...
 
-## tests: black box tests
+golint:
+	golint ./adapter/...
+	golint ./adm/...
+	golint ./context/...
+	golint ./engine/...
+	golint ./tests/...
+	golint ./examples/...
+	golint ./modules/...
+	golint ./plugins/...
+	golint ./template/...
 
-black-box-test: mysql-test pg-test sqlite-test ms-test
+govet:
+	go vet ./adapter/...
+	go vet ./adm/...
+	go vet ./context/...
+	go vet ./engine/...
+	go vet ./tests/...
+	go vet ./examples/...
+	go vet ./modules/...
+	go vet ./plugins/...
+	go vet ./template/...
 
-mysql-test: $(TEST_FRAMEWORK_DIR)/*
+deps:
+	go get github.com/kardianos/govendor
+	govendor sync
+
+test:
 	go get github.com/ugorji/go/codec@none
-	for file in $^ ; do \
-	make import-mysql ; \
-	gotest -v ./$${file}/... -args $(TEST_CONFIG_PATH) ; \
-	done
+	make mysql-test
+	make pg-test
+	make sqlite-test
+	make ms-test
+	make web-test
 
-sqlite-test: $(TEST_FRAMEWORK_DIR)/*
-	for file in $^ ; do \
-	make import-sqlite ; \
-	gotest -v ./$${file}/... -args $(TEST_CONFIG_SQLITE_PATH) ; \
-	done
+mysql-test:
+	make import-mysql
+	gotest -v ./tests/frameworks/gin/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/beego/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/buffalo/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/chi/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/echo/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/gorilla/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/gf/... -args $(TEST_CONFIG_PATH)
+	make import-mysql
+	gotest -v ./tests/frameworks/fasthttp/... -args $(TEST_CONFIG_PATH)
 
-pg-test: $(TEST_FRAMEWORK_DIR)/*
-	for file in $^ ; do \
-	make import-postgresql ; \
-	gotest -v ./$${file}/... -args $(TEST_CONFIG_PQ_PATH) ; \
-	done
-
-ms-test: $(TEST_FRAMEWORK_DIR)/*
-	for file in $^ ; do \
-	make import-mssql ; \
-	gotest -v ./$${file}/... -args $(TEST_CONFIG_MS_PATH) ; \
-	done
-
-## tests: user acceptance tests
-
-web-test: import-mysql
-	gotest -v ./tests/web/...
-	rm -rf ./tests/web/User*
-
-web-test-debug: import-mysql
-	gotest -v ./tests/web/... -args true
-
-## tests: unit tests
-
-unit-test:
-	gotest -v ./adm/...
-	gotest -v ./context/...
-	gotest -v ./modules/...
-	gotest -v ./plugins/admin/controller/...
-	gotest -v ./plugins/admin/modules/parameter/...
-	gotest -v ./plugins/admin/modules/table/...
-	gotest -v ./plugins/admin/modules/...
-
-## tests: helpers
+sqlite-test:
+	make import-sqlite
+	gotest -v ./tests/frameworks/gin/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/beego/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/buffalo/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/chi/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/echo/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/gorilla/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/gf/... -args $(TEST_CONFIG_SQLITE_PATH)
+	make import-sqlite
+	gotest -v ./tests/frameworks/fasthttp/... -args $(TEST_CONFIG_SQLITE_PATH)
 
 import-sqlite:
 	rm -rf ./tests/common/admin.db
@@ -87,36 +115,75 @@ import-mssql:
 backup-mssql:
 	docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P Aa123456 -Q "BACKUP DATABASE [goadmin] TO DISK = N'/home/data/admin_ms.bak' WITH NOFORMAT, NOINIT, NAME = 'goadmin-full', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
 
+pg-test:
+	make import-postgresql
+	gotest -v ./tests/frameworks/gin/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/beego/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/buffalo/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/chi/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/echo/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/gorilla/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/gf/... -args $(TEST_CONFIG_PQ_PATH)
+	make import-postgresql
+	gotest -v ./tests/frameworks/fasthttp/... -args $(TEST_CONFIG_PQ_PATH)
+
+ms-test:
+	make import-mssql
+	gotest -v ./tests/frameworks/gin/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/beego/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/buffalo/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/chi/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/echo/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/gorilla/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/gf/... -args $(TEST_CONFIG_MS_PATH)
+	make import-mssql
+	gotest -v ./tests/frameworks/fasthttp/... -args $(TEST_CONFIG_MS_PATH)
+
+web-test:
+	make import-mysql
+	gotest -v ./tests/web/...
+	rm -rf ./tests/web/User*
+
+web-test-debug:
+	make import-mysql
+	gotest -v ./tests/web/... -args true
+
+unit-test:
+	gotest -v ./adm/...
+	gotest -v ./context/...
+	gotest -v ./modules/auth/...
+	gotest -v ./modules/collection/...
+	gotest -v ./modules/config/...
+	gotest -v ./modules/db/...
+	gotest -v ./modules/language/...
+	gotest -v ./modules/logger/...
+	gotest -v ./modules/menu/...
+	gotest -v ./modules/utils/...
+	gotest -v ./plugins/admin/controller/...
+	gotest -v ./plugins/admin/modules/parameter/...
+	gotest -v ./plugins/admin/modules/table/...
+	gotest -v ./plugins/admin/modules/...
+
 fix-gf:
-	go get -u -v github.com/gogf/gf@v1.11.7
-	sudo chmod -R 777 $(GOPATH)/pkg/mod/github.com/gogf/gf@v1.11.7/net/ghttp/ghttp_server_handler.go
-	sudo echo "\nfunc (s *Server) DefaultHttpHandle(w http.ResponseWriter, r *http.Request) { \n s.handleRequest(w, r) \n}\n" >> $(GOPATH)/pkg/mod/github.com/gogf/gf@v1.11.7/net/ghttp/ghttp_server_handler.go
+	go get -u -v github.com/gogf/gf@v1.9.10
+	sudo echo "\nfunc (s *Server) DefaultHttpHandle(w http.ResponseWriter, r *http.Request) { \n s.handleRequest(w, r) \n}\n" >> $(GOPATH)/pkg/mod/github.com/gogf/gf@v1.9.10/net/ghttp/ghttp_server_handler.go
 
-cp-mod:
-	cp go.mod go.mod.old
-	cp go.sum go.sum.old
-
-restore-mod:
-	mv go.mod.old go.mod
-	mv go.sum.old go.sum
-
-## code style check
-
-lint: fmt golint govet cilint
-
-fmt:
-	GO111MODULE=off go fmt ./...
-
-govet:
-	GO111MODULE=off go vet ./...
-
-cilint:
-	GO111MODULE=off golangci-lint run
-
-golint:
-	GO111MODULE=off golint ./...
-
-## cli version update
+lint:
+	make golint
+	make govet
+	golangci-lint run
 
 cli:
 	GO111MODULE=on $(GOBUILD) -ldflags "-w" -o ./adm/build/mac/$(BINARY_NAME) ./adm/...
@@ -141,4 +208,4 @@ cli:
 	cp ./adm/build/windows/i386/adm_windows_i386_$(VERSION).zip ./adm/build/zip/
 	cp ./adm/build/mac/adm_darwin_x86_64_$(VERSION).zip ./adm/build/zip/
 
-.PHONY: all fmt golint govet cp-mod restore-mod test black-box-test mysql-test sqlite-test import-sqlite import-mysql import-postgresql pg-test fix-gf lint cilint cli
+.PHONY: all tmpl fmt golint govet deps test mysql-test sqlite-test import-sqlite import-mysql import-postgresql pg-test fix-gf lint cli

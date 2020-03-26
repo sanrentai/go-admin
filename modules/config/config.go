@@ -94,9 +94,6 @@ type Store struct {
 }
 
 func (s Store) URL(suffix string) string {
-	if len(suffix) > 4 && suffix[:4] == "http" {
-		return suffix
-	}
 	if s.Prefix == "" {
 		if suffix[0] == '/' {
 			return suffix
@@ -110,13 +107,7 @@ func (s Store) URL(suffix string) string {
 		return s.Prefix + "/" + suffix
 	}
 	if suffix[0] == '/' {
-		if len(s.Prefix) > 4 && s.Prefix[:4] == "http" {
-			return s.Prefix + suffix
-		}
 		return "/" + s.Prefix + suffix
-	}
-	if len(s.Prefix) > 4 && s.Prefix[:4] == "http" {
-		return s.Prefix + "/" + suffix
 	}
 	return "/" + s.Prefix + "/" + suffix
 }

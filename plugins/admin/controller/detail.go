@@ -43,7 +43,6 @@ func (h *Handler) ShowDetail(ctx *context.Context) {
 			Field:        field.Field,
 			TypeName:     field.TypeName,
 			Head:         field.Head,
-			Join:         field.Join,
 			FormType:     form.Default,
 			FieldDisplay: field.FieldDisplay,
 		}

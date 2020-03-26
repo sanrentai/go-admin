@@ -395,11 +395,6 @@ const (
 	SortAsc
 )
 
-type primaryKey struct {
-	Type db.DatabaseType
-	Name string
-}
-
 // InfoPanel
 type InfoPanel struct {
 	FieldList         FieldList
@@ -420,8 +415,6 @@ type InfoPanel struct {
 	DefaultPageSize int
 
 	ExportType int
-
-	primaryKey primaryKey
 
 	IsHideNewButton    bool
 	IsHideExportButton bool
@@ -661,12 +654,17 @@ func (i *InfoPanel) WhereRaw(raw string, arg ...interface{}) *InfoPanel {
 }
 
 func (i *InfoPanel) AddSelectBox(placeholder string, options FieldOptions, action Action, width ...int) *InfoPanel {
+	id := i.btnUUID()
+	action.SetBtnId(id)
 	options = append(FieldOptions{{Value: "", Text: language.Get("All")}}, options...)
 	action.SetBtnData(options)
-	i.addButton(GetDefaultSelection(placeholder, options, action, width...)).
-		addFooterHTML(action.FooterContent()).
-		addCallback(action.GetCallbacks())
-
+	w := 100
+	if len(width) > 0 {
+		w = width[0]
+	}
+	i.Buttons = append(i.Buttons, DefaultSelection{Width: w, Id: id, Placeholder: placeholder, Options: options, Action: action})
+	i.FooterHtml += action.FooterContent()
+	i.Callbacks = i.Callbacks.AddCallback(action.GetCallbacks())
 	return i
 }
 
@@ -679,31 +677,59 @@ func (i *InfoPanel) IsExportValue() bool {
 	return i.ExportType == 1
 }
 
+func (i *InfoPanel) btnUUID() string {
+	return "info-btn-" + utils.Uuid(10)
+}
+
 func (i *InfoPanel) AddButtonRaw(btn Button, action Action) *InfoPanel {
 	i.Buttons = append(i.Buttons, btn)
-	i.addFooterHTML(action.FooterContent()).addCallback(action.GetCallbacks())
+	i.FooterHtml += action.FooterContent()
+	i.Callbacks = i.Callbacks.AddCallback(action.GetCallbacks())
 	return i
 }
 
 func (i *InfoPanel) AddButton(title template.HTML, icon string, action Action, color ...template.HTML) *InfoPanel {
-	i.addButton(GetDefaultButton(title, icon, action, color...)).
-		addFooterHTML(action.FooterContent()).
-		addCallback(action.GetCallbacks())
+	id := i.btnUUID()
+	action.SetBtnId(id)
+	if len(color) == 0 {
+		i.Buttons = append(i.Buttons, DefaultButton{Title: title, Id: id, Action: action, Icon: icon})
+	}
+	if len(color) == 1 {
+		i.Buttons = append(i.Buttons, DefaultButton{Title: title, Color: color[0], Id: id, Action: action, Icon: icon})
+	}
+	if len(color) >= 2 {
+		i.Buttons = append(i.Buttons, DefaultButton{Title: title, Color: color[0], TextColor: color[1], Id: id, Action: action, Icon: icon})
+	}
+	i.FooterHtml += action.FooterContent()
+	i.Callbacks = i.Callbacks.AddCallback(action.GetCallbacks())
 	return i
 }
 
 func (i *InfoPanel) AddActionButton(title template.HTML, action Action, ids ...string) *InfoPanel {
-	i.addActionButton(GetActionButton(title, action, ids...)).
-		addFooterHTML(action.FooterContent()).
-		addCallback(action.GetCallbacks())
-
+	id := ""
+	if len(ids) > 0 {
+		id = ids[0]
+	} else {
+		id = "action-info-btn-" + utils.Uuid(10)
+	}
+	action.SetBtnId(id)
+	i.ActionButtons = append(i.ActionButtons, ActionButton{Title: title, Id: id, Action: action})
+	i.FooterHtml += action.FooterContent()
+	i.Callbacks = i.Callbacks.AddCallback(action.GetCallbacks())
 	return i
 }
 
 func (i *InfoPanel) AddActionButtonFront(title template.HTML, action Action, ids ...string) *InfoPanel {
-	i.ActionButtons = append([]Button{GetActionButton(title, action, ids...)}, i.ActionButtons...)
-	i.addFooterHTML(action.FooterContent()).
-		addCallback(action.GetCallbacks())
+	id := ""
+	if len(ids) > 0 {
+		id = ids[0]
+	} else {
+		id = "action-info-btn-" + utils.Uuid(10)
+	}
+	action.SetBtnId(id)
+	i.ActionButtons = append([]Button{ActionButton{Title: title, Id: id, Action: action}}, i.ActionButtons...)
+	i.FooterHtml += action.FooterContent()
+	i.Callbacks = i.Callbacks.AddCallback(action.GetCallbacks())
 	return i
 }
 
@@ -767,60 +793,8 @@ func (i *InfoPanel) SetGetDataFn(fn GetDataFn) *InfoPanel {
 	return i
 }
 
-func (i *InfoPanel) SetPrimaryKey(name string, typ db.DatabaseType) *InfoPanel {
-	i.primaryKey = primaryKey{Name: name, Type: typ}
-	return i
-}
-
 func (i *InfoPanel) SetTableFixed() *InfoPanel {
 	i.TableLayout = "fixed"
-	return i
-}
-
-func (i *InfoPanel) AddColumn(head string, fun FieldFilterFn) *InfoPanel {
-	i.FieldList = append(i.FieldList, Field{
-		Head:     head,
-		Field:    utils.Uuid(10),
-		TypeName: db.Varchar,
-		Sortable: false,
-		EditAble: false,
-		EditType: table.Text,
-		FieldDisplay: FieldDisplay{
-			Display:              fun,
-			DisplayProcessChains: chooseDisplayProcessChains(i.processChains),
-		},
-	})
-	i.curFieldListIndex++
-	return i
-}
-
-func (i *InfoPanel) AddColumnButtons(head string, buttons ...Button) *InfoPanel {
-	var content, js template.HTML
-	for _, btn := range buttons {
-		btn.GetAction().SetBtnId(btn.ID())
-		btnContent, btnJs := btn.Content()
-		content += btnContent
-		js += template.HTML(btnJs)
-		i.FooterHtml += template.HTML(ParseTableDataTmpl(btn.GetAction().FooterContent()))
-		i.Callbacks = i.Callbacks.AddCallback(btn.GetAction().GetCallbacks())
-	}
-	i.FooterHtml += template.HTML("<script>") + template.HTML(ParseTableDataTmpl(js)) + template.HTML("</script>")
-	i.FieldList = append(i.FieldList, Field{
-		Head:     head,
-		Field:    utils.Uuid(10),
-		TypeName: db.Varchar,
-		Sortable: false,
-		EditAble: false,
-		EditType: table.Text,
-		FieldDisplay: FieldDisplay{
-			Display: func(value FieldModel) interface{} {
-				pk := db.GetValueFromDatabaseType(i.primaryKey.Type, value.Row[i.primaryKey.Name], i.isFromJSON())
-				return template.HTML(ParseTableDataTmplWithID(pk.HTML(), string(content)))
-			},
-			DisplayProcessChains: chooseDisplayProcessChains(i.processChains),
-		},
-	})
-	i.curFieldListIndex++
 	return i
 }
 
@@ -1186,28 +1160,4 @@ func (i *InfoPanel) HideDeleteButton() *InfoPanel {
 func (i *InfoPanel) HideDetailButton() *InfoPanel {
 	i.IsHideDetailButton = true
 	return i
-}
-
-func (i *InfoPanel) addFooterHTML(footer template.HTML) *InfoPanel {
-	i.FooterHtml += template.HTML(ParseTableDataTmpl(footer))
-	return i
-}
-
-func (i *InfoPanel) addCallback(node context.Node) *InfoPanel {
-	i.Callbacks = i.Callbacks.AddCallback(node)
-	return i
-}
-
-func (i *InfoPanel) addButton(btn Button) *InfoPanel {
-	i.Buttons = append(i.Buttons, btn)
-	return i
-}
-
-func (i *InfoPanel) addActionButton(btn Button) *InfoPanel {
-	i.ActionButtons = append(i.ActionButtons, btn)
-	return i
-}
-
-func (i *InfoPanel) isFromJSON() bool {
-	return i.GetDataFn != nil
 }

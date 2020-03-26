@@ -86,7 +86,7 @@ type Table interface {
 	GetDataWithId(params parameter.Parameters) (FormInfo, error)
 	UpdateData(dataList form.Values) error
 	InsertData(dataList form.Values) error
-	DeleteData(pk string) error
+	DeleteData(id string) error
 
 	GetNewForm() FormInfo
 
@@ -105,15 +105,15 @@ type BaseTable struct {
 }
 
 func (base *BaseTable) GetInfo() *types.InfoPanel {
-	return base.Info.SetPrimaryKey(base.PrimaryKey.Name, base.PrimaryKey.Type)
+	return base.Info
 }
 
 func (base *BaseTable) GetDetail() *types.InfoPanel {
-	return base.Detail.SetPrimaryKey(base.PrimaryKey.Name, base.PrimaryKey.Type)
+	return base.Detail
 }
 
 func (base *BaseTable) GetForm() *types.FormPanel {
-	return base.Form.SetPrimaryKey(base.PrimaryKey.Name, base.PrimaryKey.Type)
+	return base.Form
 }
 
 func (base *BaseTable) GetCanAdd() bool {
@@ -197,144 +197,4 @@ func SetServices(srv service.List) {
 	}
 
 	services = srv
-}
-
-// sql is a helper function return db sql.
-func (tb DefaultTable) sql() *db.SQL {
-	return db.WithDriverAndConnection(tb.connection, db.GetConnectionFromService(services.Get(tb.connectionDriver)))
-}
-
-func GetNewFormList(groupHeaders []string,
-	group [][]string,
-	old []types.FormField) ([]types.FormField, [][]types.FormField, []string) {
-
-	if len(group) == 0 {
-		var newForm []types.FormField
-		for _, v := range old {
-			v.Value = v.Default
-			if !v.NotAllowAdd {
-				v.Editable = true
-				newForm = append(newForm, v)
-			}
-		}
-		return newForm, [][]types.FormField{}, []string{}
-	}
-
-	var (
-		newForm = make([][]types.FormField, 0)
-		headers = make([]string, 0)
-	)
-
-	for key, value := range group {
-		list := make([]types.FormField, 0)
-
-		for i := 0; i < len(value); i++ {
-			for _, v := range old {
-				if v.Field == value[i] {
-					v.Value = v.Default
-					if !v.NotAllowAdd {
-						v.Editable = true
-						list = append(list, v)
-						break
-					}
-				}
-			}
-		}
-
-		newForm = append(newForm, list)
-		headers = append(headers, groupHeaders[key])
-	}
-
-	return []types.FormField{}, newForm, headers
-}
-
-// ***************************************
-// helper function for database operation
-// ***************************************
-
-func delimiter(del, s string) string {
-	if del == "[" {
-		return "[" + s + "]"
-	}
-	return del + s + del
-}
-
-func filterFiled(filed, delimiter string) string {
-	if delimiter == "[" {
-		return filed
-	}
-	return delimiter + filed + delimiter
-}
-
-type Columns []string
-
-func (tb DefaultTable) getColumns(columnsModel []map[string]interface{}) (Columns, bool) {
-	columns := make(Columns, len(columnsModel))
-	switch tb.connectionDriver {
-	case "postgresql":
-		auto := false
-		for key, model := range columnsModel {
-			columns[key] = model["column_name"].(string)
-			if columns[key] == tb.primaryKey.Name {
-				if v, ok := model["column_default"].(string); ok {
-					if strings.Contains(v, "nextval") {
-						auto = true
-					}
-				}
-			}
-		}
-		return columns, auto
-	case "mysql":
-		auto := false
-		for key, model := range columnsModel {
-			columns[key] = model["Field"].(string)
-			if columns[key] == tb.primaryKey.Name {
-				if v, ok := model["Extra"].(string); ok {
-					if v == "auto_increment" {
-						auto = true
-					}
-				}
-			}
-		}
-		return columns, auto
-	case "sqlite":
-		for key, model := range columnsModel {
-			columns[key] = string(model["name"].(string))
-		}
-
-		num, _ := tb.sql().Table("sqlite_sequence").
-			Where("name", "=", tb.GetForm().Table).Count()
-
-		return columns, num > 0
-	case "mssql":
-		for key, model := range columnsModel {
-			columns[key] = string(model["column_name"].(string))
-		}
-		return columns, true
-	default:
-		panic("wrong driver")
-	}
-}
-
-func getAggregationExpression(driver, field, headField, delimiter string) string {
-	switch driver {
-	case "postgresql":
-		return fmt.Sprintf("string_agg(%s::character varying, '%s') as %s", field, delimiter, headField)
-	case "mysql":
-		return fmt.Sprintf("group_concat(%s separator '%s') as %s", field, delimiter, headField)
-	case "sqlite":
-		return fmt.Sprintf("group_concat(%s, '%s') as %s", field, delimiter, headField)
-	default:
-		panic("wrong driver")
-	}
-}
-
-// inArray checks the find string is in the columns or not.
-func inArray(columns []string, find string) bool {
-	for i := 0; i < len(columns); i++ {
-		if columns[i] == find {
-			return true
-		}
-	}
-	return false
 }

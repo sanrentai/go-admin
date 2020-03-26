@@ -5,7 +5,6 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/config"
@@ -66,13 +65,10 @@ type Page struct {
 
 	// Components assets
 	AssetsList template.HTML
-
-	// Top Nav Buttons
-	NavButtons Buttons
 }
 
-func NewPage(user models.UserModel, menu menu.Menu, panel Panel, cfg config.Config, assetsList template.HTML, buttons ...Button) *Page {
-	return &Page{
+func NewPage(user models.UserModel, menu menu.Menu, panel Panel, cfg config.Config, assetsList template.HTML) Page {
+	return Page{
 		User:  user,
 		Menu:  menu,
 		Panel: panel,
@@ -89,18 +85,11 @@ func NewPage(user models.UserModel, menu menu.Menu, panel Panel, cfg config.Conf
 		CustomHeadHtml: cfg.CustomHeadHtml,
 		CustomFootHtml: cfg.CustomFootHtml,
 		AssetsList:     assetsList,
-		NavButtons:     buttons,
 	}
 }
 
-func (page *Page) AddButton(title template.HTML, icon string, action Action) *Page {
-	page.NavButtons = append(page.NavButtons, GetNavButton(title, icon, action))
-	page.CustomFootHtml += action.FooterContent()
-	return page
-}
-
-func NewPagePanel(panel Panel) *Page {
-	return &Page{
+func NewPagePanel(panel Panel) Page {
+	return Page{
 		Panel: panel,
 		System: SystemInfo{
 			Version: system.Version(),
@@ -111,34 +100,6 @@ func NewPagePanel(panel Panel) *Page {
 // SystemInfo contains basic info of system.
 type SystemInfo struct {
 	Version string
-}
-
-type TableRowData struct {
-	Id  template.HTML
-	Ids template.JS
-}
-
-func ParseTableDataTmpl(content interface{}) string {
-	var (
-		c  string
-		ok bool
-	)
-	if c, ok = content.(string); !ok {
-		c = string(content.(template.HTML))
-	}
-	t := template.New("row_data_tmpl")
-	t, _ = t.Parse(c)
-	buf := new(bytes.Buffer)
-	_ = t.Execute(buf, TableRowData{Ids: "selectedRows().join()"})
-	return buf.String()
-}
-
-func ParseTableDataTmplWithID(id template.HTML, content string) string {
-	t := template.New("row_data_tmpl")
-	t, _ = t.Parse(content)
-	buf := new(bytes.Buffer)
-	_ = t.Execute(buf, TableRowData{Id: id, Ids: "selectedRows().join()"})
-	return buf.String()
 }
 
 // Panel contains the main content of the template which used as pjax.

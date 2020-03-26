@@ -70,11 +70,11 @@ type TokenService struct {
 }
 
 func (s *TokenService) Name() string {
-	return TokenServiceKey
+	return "token_csrf_helper"
 }
 
 func init() {
-	service.Register(TokenServiceKey, func() (service.Service, error) {
+	service.Register("token_csrf_helper", func() (service.Service, error) {
 		return &TokenService{
 			tokens: make(CSRFToken, 0),
 		}, nil
@@ -117,7 +117,7 @@ func (s *TokenService) CheckToken(toCheckToken string) bool {
 // CSRFToken is type of a csrf token list.
 type CSRFToken []string
 
-type Processor func(ctx *context.Context) (model models.UserModel, exist bool, msg string)
+type Processor func(ctx *context.Context) (model models.UserModel, exist bool)
 
 type Service struct {
 	P Processor

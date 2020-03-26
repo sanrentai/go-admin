@@ -6,7 +6,6 @@ package db
 
 import (
 	"fmt"
-	"html/template"
 	"strconv"
 )
 
@@ -190,11 +189,6 @@ func (v Value) ToInt64() int64 {
 // String return the string value.
 func (v Value) String() string {
 	return string(v)
-}
-
-// HTML return the template.HTML value.
-func (v Value) HTML() template.HTML {
-	return template.HTML(v)
 }
 
 func GetValueFromDatabaseType(typ DatabaseType, value interface{}, json bool) Value {

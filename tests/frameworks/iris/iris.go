@@ -27,7 +27,7 @@ import (
 )
 
 func newIrisHandler() http.Handler {
-	app := iris.New()
+	app := iris.Default()
 
 	eng := engine.Default()
 
@@ -43,9 +43,5 @@ func newIrisHandler() http.Handler {
 
 	eng.HTML("GET", "/admin", tables.GetContent)
 
-	if err := app.Build(); err != nil {
-		panic(err)
-	}
-
-	return app.Router
+	return app
 }
