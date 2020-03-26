@@ -266,37 +266,53 @@ func Execute(tmpl *template.Template,
 	user models.UserModel,
 	panel types.Panel,
 	config c.Config,
-	globalMenu *menu.Menu) *bytes.Buffer {
+	globalMenu *menu.Menu, animation ...bool) *bytes.Buffer {
 
 	buf := new(bytes.Buffer)
 	err := tmpl.ExecuteTemplate(buf, tmplName, types.NewPage(user, *globalMenu,
-		panel.GetContent(config.IsProductionEnvironment()), config, GetComponentAssetListsHTML()))
+		panel.GetContent(append([]bool{config.IsProductionEnvironment()}, animation...)...), config, GetComponentAssetListsHTML()))
 	if err != nil {
 		fmt.Println("Execute err", err)
 	}
 	return buf
 }
 
-func DefaultFuncMap() template.FuncMap {
-	return template.FuncMap{
-		"lang":     language.Get,
-		"langHtml": language.GetFromHtml,
-		"link": func(cdnUrl, prefixUrl, assetsUrl string) string {
-			if cdnUrl == "" {
-				return prefixUrl + assetsUrl
-			}
-			return cdnUrl + assetsUrl
-		},
-		"isLinkUrl": func(s string) bool {
-			return (len(s) > 7 && s[:7] == "http://") || (len(s) > 8 && s[:8] == "https://")
-		},
-		"render": func(s, old, repl template.HTML) template.HTML {
-			return template.HTML(strings.Replace(string(s), string(old), string(repl), -1))
-		},
-		"renderJS": func(s template.JS, old, repl template.HTML) template.JS {
-			return template.JS(strings.Replace(string(s), string(old), string(repl), -1))
-		},
-	}
+var DefaultFuncMap = template.FuncMap{
+	"lang":     language.Get,
+	"langHtml": language.GetFromHtml,
+	"link": func(cdnUrl, prefixUrl, assetsUrl string) string {
+		if cdnUrl == "" {
+			return prefixUrl + assetsUrl
+		}
+		return cdnUrl + assetsUrl
+	},
+	"isLinkUrl": func(s string) bool {
+		return (len(s) > 7 && s[:7] == "http://") || (len(s) > 8 && s[:8] == "https://")
+	},
+	"render": func(s, old, repl template.HTML) template.HTML {
+		return template.HTML(strings.Replace(string(s), string(old), string(repl), -1))
+	},
+	"renderJS": func(s template.JS, old, repl template.HTML) template.JS {
+		return template.JS(strings.Replace(string(s), string(old), string(repl), -1))
+	},
+	"divide": func(a, b int) int {
+		return a / b
+	},
+	"renderRowDataHTML": func(id, content template.HTML) template.HTML {
+		return template.HTML(types.ParseTableDataTmplWithID(id, string(content)))
+	},
+	"renderRowDataJS": func(id template.HTML, content template.JS) template.JS {
+		return template.JS(types.ParseTableDataTmplWithID(id, string(content)))
+	},
+	"js": func(s interface{}) template.JS {
+		if ss, ok := s.(string); ok {
+			return template.JS(ss)
+		}
+		if ss, ok := s.(template.HTML); ok {
+			return template.JS(ss)
+		}
+		return ""
+	},
 }
 
 type BaseComponent struct{}

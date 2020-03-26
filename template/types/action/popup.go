@@ -10,7 +10,7 @@ import (
 )
 
 type PopUpAction struct {
-	BtnId    string
+	BaseAction
 	Url      string
 	Method   string
 	Id       string
@@ -54,9 +54,6 @@ func (pop *PopUpAction) GetCallbacks() context.Node {
 	}
 }
 
-func (pop *PopUpAction) SetBtnId(btnId string)   { pop.BtnId = btnId }
-func (pop *PopUpAction) BtnClass() template.HTML { return "" }
-
 func (pop *PopUpAction) Js() template.JS {
 	return template.JS(`$('.` + pop.BtnId + `').on('click', function (event) {
 						let data = ` + pop.Data.JSON() + `;
@@ -83,10 +80,10 @@ func (pop *PopUpAction) Js() template.JS {
 }
 
 func (pop *PopUpAction) BtnAttribute() template.HTML {
-	return template.HTML(`data-toggle="modal" data-target="#` + pop.Id + ` "`)
+	return template.HTML(`data-toggle="modal" data-target="#` + pop.Id + ` " data-id="{{.Id}}"`)
 }
 
-func (pop *PopUpAction) ExtContent() template.HTML {
+func (pop *PopUpAction) FooterContent() template.HTML {
 	return template2.Default().Popup().SetID(pop.Id).
 		SetTitle(template.HTML(pop.Title)).
 		SetBody(template.HTML(``)).

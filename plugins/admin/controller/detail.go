@@ -2,25 +2,26 @@ package controller
 
 import (
 	"fmt"
+	template2 "html/template"
+	"net/http"
+
 	"github.com/GoAdminGroup/go-admin/context"
 	"github.com/GoAdminGroup/go-admin/modules/auth"
 	"github.com/GoAdminGroup/go-admin/modules/language"
 	"github.com/GoAdminGroup/go-admin/modules/menu"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
+	form2 "github.com/GoAdminGroup/go-admin/plugins/admin/modules/form"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/parameter"
-	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/table"
 	"github.com/GoAdminGroup/go-admin/template"
 	"github.com/GoAdminGroup/go-admin/template/types"
 	"github.com/GoAdminGroup/go-admin/template/types/form"
-	template2 "html/template"
-	"net/http"
 )
 
-func ShowDetail(ctx *context.Context) {
+func (h *Handler) ShowDetail(ctx *context.Context) {
 	prefix := ctx.Query(constant.PrefixKey)
 	id := ctx.Query(constant.DetailPKKey)
-	panel := table.Get(prefix, ctx)
+	panel := h.table(prefix, ctx)
 	user := auth.Auth(ctx)
 
 	newPanel := panel.Copy()
@@ -42,34 +43,26 @@ func ShowDetail(ctx *context.Context) {
 			Field:        field.Field,
 			TypeName:     field.TypeName,
 			Head:         field.Head,
+			Join:         field.Join,
 			FormType:     form.Default,
 			FieldDisplay: field.FieldDisplay,
 		}
 	}
 
-	formData, _, _, _, _, err := newPanel.GetDataWithId(id)
-
-	var alert template2.HTML
-
-	if err != nil && alert == "" {
-		alert = aAlert().SetTitle(constant.DefaultErrorMsg).
-			SetTheme("warning").
-			SetContent(template2.HTML(err.Error())).
-			GetContent()
-	}
-
-	paramStr := parameter.GetParam(ctx.Request.URL.Query(),
+	param := parameter.GetParam(ctx.Request.URL,
 		panel.GetInfo().DefaultPageSize,
 		panel.GetInfo().SortField,
-		panel.GetInfo().GetSort()).GetRouteParamStr()
+		panel.GetInfo().GetSort())
 
-	editUrl := modules.AorEmpty(panel.GetEditable(), routePathWithPrefix("show_edit", prefix)+paramStr+
+	paramStr := param.DeleteDetailPk().GetRouteParamStr()
+
+	editUrl := modules.AorEmpty(panel.GetEditable(), h.routePathWithPrefix("show_edit", prefix)+paramStr+
 		"&"+constant.EditPKKey+"="+ctx.Query(constant.DetailPKKey))
-	deleteUrl := modules.AorEmpty(panel.GetDeletable(), routePathWithPrefix("delete", prefix)+paramStr)
-	infoUrl := routePathWithPrefix("info", prefix) + paramStr
+	deleteUrl := modules.AorEmpty(panel.GetDeletable(), h.routePathWithPrefix("delete", prefix)+paramStr)
+	infoUrl := h.routePathWithPrefix("info", prefix) + paramStr
 
-	editUrl = user.GetCheckPermissionByUrlMethod(editUrl, route("show_edit").Method())
-	deleteUrl = user.GetCheckPermissionByUrlMethod(deleteUrl, route("delete").Method())
+	editUrl = user.GetCheckPermissionByUrlMethod(editUrl, h.route("show_edit").Method())
+	deleteUrl = user.GetCheckPermissionByUrlMethod(deleteUrl, h.route("delete").Method())
 
 	deleteJs := ""
 
@@ -125,17 +118,30 @@ $('.delete-btn').on('click', function (event) {
 		desc = panel.GetInfo().Description + language.Get("Detail")
 	}
 
+	formInfo, err := newPanel.GetDataWithId(param.WithPKs(id))
+
+	var alert template2.HTML
+
+	if err != nil && alert == "" {
+		alert = aAlert().SetTitle(constant.DefaultErrorMsg).
+			SetTheme("warning").
+			SetContent(template2.HTML(err.Error())).
+			GetContent()
+	}
+
 	tmpl, tmplName := aTemplate().GetTemplate(isPjax(ctx))
 	buf := template.Execute(tmpl, tmplName, user, types.Panel{
 		Content: alert + detailContent(aForm().
 			SetTitle(template.HTML(title)).
-			SetContent(formData).
+			SetContent(formInfo.FieldList).
 			SetFooter(template.HTML(deleteJs)).
-			SetInfoUrl(infoUrl).
-			SetPrefix(config.PrefixFixSlash()), editUrl, deleteUrl),
+			SetHiddenFields(map[string]string{
+				form2.PreviousKey: infoUrl,
+			}).
+			SetPrefix(h.config.PrefixFixSlash()), editUrl, deleteUrl),
 		Description: desc,
 		Title:       title,
-	}, config, menu.GetGlobalMenu(user, conn).SetActiveClass(config.URLRemovePrefix(ctx.Path())))
+	}, h.config, menu.GetGlobalMenu(user, h.conn).SetActiveClass(h.config.URLRemovePrefix(ctx.Path())))
 
 	ctx.HTML(http.StatusOK, buf.String())
 }

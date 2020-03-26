@@ -7,10 +7,14 @@ import (
 	"github.com/GoAdminGroup/go-admin/modules/db"
 	"github.com/GoAdminGroup/go-admin/modules/service"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/form"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/paginator"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/parameter"
 	"github.com/GoAdminGroup/go-admin/template/types"
+	"html/template"
 	"net/http"
 	"net/url"
+	"sync"
+	"sync/atomic"
 )
 
 type Generator func(ctx *context.Context) Table
@@ -44,15 +48,16 @@ func (g GeneratorList) Add(key string, gen Generator) {
 	g[key] = gen
 }
 
-func (g GeneratorList) Combine(gg GeneratorList) {
+func (g GeneratorList) Combine(gg GeneratorList) GeneratorList {
 	for key, gen := range gg {
 		if _, ok := g[key]; !ok {
 			g[key] = gen
 		}
 	}
+	return g
 }
 
-func (g GeneratorList) CombineAll(ggg []GeneratorList) {
+func (g GeneratorList) CombineAll(ggg []GeneratorList) GeneratorList {
 	for _, gg := range ggg {
 		for key, gen := range gg {
 			if _, ok := g[key]; !ok {
@@ -60,19 +65,7 @@ func (g GeneratorList) CombineAll(ggg []GeneratorList) {
 			}
 		}
 	}
-}
-
-var generators = make(GeneratorList)
-
-func Get(key string, ctx *context.Context) Table {
-	return generators[key](ctx)
-}
-
-// SetGenerators update generators.
-func SetGenerators(gens map[string]Generator) {
-	for key, gen := range gens {
-		generators[key] = gen
-	}
+	return g
 }
 
 type Table interface {
@@ -88,14 +81,95 @@ type Table interface {
 
 	GetPrimaryKey() PrimaryKey
 
-	GetData(path string, params parameter.Parameters, isAll bool) (PanelInfo, error)
-	GetDataWithIds(path string, params parameter.Parameters, ids []string) (PanelInfo, error)
-	GetDataWithId(id string) ([]types.FormField, [][]types.FormField, []string, string, string, error)
-	UpdateDataFromDatabase(dataList form.Values) error
-	InsertDataFromDatabase(dataList form.Values) error
-	DeleteDataFromDatabase(id string) error
+	GetData(params parameter.Parameters) (PanelInfo, error)
+	GetDataWithIds(params parameter.Parameters) (PanelInfo, error)
+	GetDataWithId(params parameter.Parameters) (FormInfo, error)
+	UpdateData(dataList form.Values) error
+	InsertData(dataList form.Values) error
+	DeleteData(pk string) error
+
+	GetNewForm() FormInfo
 
 	Copy() Table
+}
+
+type BaseTable struct {
+	Info       *types.InfoPanel
+	Form       *types.FormPanel
+	Detail     *types.InfoPanel
+	CanAdd     bool
+	Editable   bool
+	Deletable  bool
+	Exportable bool
+	PrimaryKey PrimaryKey
+}
+
+func (base *BaseTable) GetInfo() *types.InfoPanel {
+	return base.Info.SetPrimaryKey(base.PrimaryKey.Name, base.PrimaryKey.Type)
+}
+
+func (base *BaseTable) GetDetail() *types.InfoPanel {
+	return base.Detail.SetPrimaryKey(base.PrimaryKey.Name, base.PrimaryKey.Type)
+}
+
+func (base *BaseTable) GetForm() *types.FormPanel {
+	return base.Form.SetPrimaryKey(base.PrimaryKey.Name, base.PrimaryKey.Type)
+}
+
+func (base *BaseTable) GetCanAdd() bool {
+	return base.CanAdd && !base.Info.IsHideNewButton
+}
+
+func (base *BaseTable) GetPrimaryKey() PrimaryKey {
+	return base.PrimaryKey
+}
+
+func (base *BaseTable) GetEditable() bool {
+	return base.Editable && !base.Info.IsHideEditButton
+}
+
+func (base *BaseTable) GetDeletable() bool {
+	return base.Deletable && !base.Info.IsHideDeleteButton
+}
+
+func (base *BaseTable) IsShowDetail() bool {
+	return !base.Info.IsHideDetailButton
+}
+
+func (base *BaseTable) GetExportable() bool {
+	return base.Exportable && !base.Info.IsHideExportButton
+}
+
+func (base *BaseTable) GetPaginator(size int, params parameter.Parameters, extraHtml ...template.HTML) types.PaginatorAttribute {
+
+	var eh template.HTML
+
+	if len(extraHtml) > 0 {
+		eh = extraHtml[0]
+	}
+
+	return paginator.Get(paginator.Config{
+		Size:         size,
+		Param:        params,
+		PageSizeList: base.Info.GetPageSizeList(),
+	}).SetExtraInfo(eh)
+}
+
+type PanelInfo struct {
+	Thead          types.Thead
+	InfoList       types.InfoList
+	FilterFormData types.FormFields
+	Paginator      types.PaginatorAttribute
+	Title          string
+	Description    string
+}
+
+type FormInfo struct {
+	FieldList         types.FormFields
+	GroupFieldList    types.GroupFormFields
+	GroupFieldHeaders types.GroupFieldHeaders
+	Title             string
+	Description       string
 }
 
 type PrimaryKey struct {
@@ -108,8 +182,19 @@ const (
 	DefaultConnectionName = "default"
 )
 
-var services service.List
+var (
+	services service.List
+	count    uint32
+	lock     sync.Mutex
+)
 
 func SetServices(srv service.List) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if atomic.LoadUint32(&count) != 0 {
+		panic("can not initialize twice")
+	}
+
 	services = srv
 }
