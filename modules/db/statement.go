@@ -142,6 +142,14 @@ func (sql *SQL) OrderBy(fields ...string) *SQL {
 	return sql
 }
 
+// OrderByRaw set order by.
+func (sql *SQL) OrderByRaw(order string) *SQL {
+	if order != "" {
+		sql.Order += " " + order
+	}
+	return sql
+}
+
 func (sql *SQL) GroupBy(fields ...string) *SQL {
 	if len(fields) == 0 {
 		panic("wrong group by field")
@@ -152,6 +160,14 @@ func (sql *SQL) GroupBy(fields ...string) *SQL {
 			return sql
 		}
 		sql.Group += " " + sql.wrap(fields[i]) + " and "
+	}
+	return sql
+}
+
+// GroupByRaw set group by.
+func (sql *SQL) GroupByRaw(group string) *SQL {
+	if group != "" {
+		sql.Group += " " + group
 	}
 	return sql
 }
@@ -215,12 +231,21 @@ func (sql *SQL) Find(arg interface{}) (map[string]interface{}, error) {
 // Count query the count of query results.
 func (sql *SQL) Count() (int64, error) {
 	var (
-		res map[string]interface{}
-		err error
+		res    map[string]interface{}
+		err    error
+		driver = sql.diver.Name()
 	)
+
 	if res, err = sql.Select("count(*)").First(); err != nil {
 		return 0, err
 	}
+
+	if driver == DriverPostgresql {
+		return res["count"].(int64), nil
+	} else if driver == DriverMssql {
+		return res[""].(int64), nil
+	}
+
 	return res["count(*)"].(int64), nil
 }
 

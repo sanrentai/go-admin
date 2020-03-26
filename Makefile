@@ -1,137 +1,122 @@
-GOCMD=go
-GOBUILD=$(GOCMD) build
-BINARY_NAME=adm
-LASTVERSION=v1.2.2
-VERSION=v1.2.3
-CLI=adm
+GOCMD = go
+GOBUILD = $(GOCMD) build
+BINARY_NAME = adm
+LAST_VERSION = v1.2.5
+VERSION = v1.2.6
+CLI = adm
 
-TEST_CONFIG_PATH=./../common/config.json
-TEST_CONFIG_PQ_PATH=./../common/config_pg.json
-TEST_CONFIG_SQLITE_PATH=./../common/config_sqlite.json
+TEST_CONFIG_PATH=./../../common/config.json
+TEST_CONFIG_PQ_PATH=./../../common/config_pg.json
+TEST_CONFIG_SQLITE_PATH=./../../common/config_sqlite.json
+TEST_CONFIG_MS_PATH=./../../common/config_ms.json
+TEST_FRAMEWORK_DIR=./tests/frameworks
 
-all: run
+all: test
 
-tmpl:
-	$(CLI) compile tpl
+## tests
 
-fmt:
-	go fmt ./adapter/...
-	go fmt ./adm/...
-	go fmt ./context/...
-	go fmt ./engine/...
-	go fmt ./tests/...
-	go fmt ./examples/...
-	go fmt ./modules/...
-	go fmt ./plugins/...
-	go fmt ./template/...
+test: cp-mod black-box-test web-test restore-mod
 
-golint:
-	golint ./adapter/...
-	golint ./adm/...
-	golint ./context/...
-	golint ./engine/...
-	golint ./tests/...
-	golint ./examples/...
-	golint ./modules/...
-	golint ./plugins/...
-	golint ./template/...
+## tests: black box tests
 
-govet:
-	go vet ./adapter/...
-	go vet ./adm/...
-	go vet ./context/...
-	go vet ./engine/...
-	go vet ./tests/...
-	go vet ./examples/...
-	go vet ./modules/...
-	go vet ./plugins/...
-	go vet ./template/...
+black-box-test: mysql-test pg-test sqlite-test ms-test
 
-deps:
-	go get github.com/kardianos/govendor
-	govendor sync
-
-test:
+mysql-test: $(TEST_FRAMEWORK_DIR)/*
 	go get github.com/ugorji/go/codec@none
-	make mysql-test
-	make pg-test
-	make sqlite-test
+	for file in $^ ; do \
+	make import-mysql ; \
+	gotest -v ./$${file}/... -args $(TEST_CONFIG_PATH) ; \
+	done
 
-mysql-test:
-	make import-mysql
-	gotest -v ./tests/gin/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/beego/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/buffalo/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/chi/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/echo/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/gorilla/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/gf/... -args $(TEST_CONFIG_PATH)
-	make import-mysql
-	gotest -v ./tests/fasthttp/... -args $(TEST_CONFIG_PATH)
+sqlite-test: $(TEST_FRAMEWORK_DIR)/*
+	for file in $^ ; do \
+	make import-sqlite ; \
+	gotest -v ./$${file}/... -args $(TEST_CONFIG_SQLITE_PATH) ; \
+	done
 
-sqlite-test:
-	make import-sqlite
-	gotest -v ./tests/gin/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/beego/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/buffalo/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/chi/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/echo/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/gorilla/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/gf/... -args $(TEST_CONFIG_SQLITE_PATH)
-	make import-sqlite
-	gotest -v ./tests/fasthttp/... -args $(TEST_CONFIG_SQLITE_PATH)
+pg-test: $(TEST_FRAMEWORK_DIR)/*
+	for file in $^ ; do \
+	make import-postgresql ; \
+	gotest -v ./$${file}/... -args $(TEST_CONFIG_PQ_PATH) ; \
+	done
+
+ms-test: $(TEST_FRAMEWORK_DIR)/*
+	for file in $^ ; do \
+	make import-mssql ; \
+	gotest -v ./$${file}/... -args $(TEST_CONFIG_MS_PATH) ; \
+	done
+
+## tests: user acceptance tests
+
+web-test: import-mysql
+	gotest -v ./tests/web/...
+	rm -rf ./tests/web/User*
+
+web-test-debug: import-mysql
+	gotest -v ./tests/web/... -args true
+
+## tests: unit tests
+
+unit-test:
+	gotest -v ./adm/...
+	gotest -v ./context/...
+	gotest -v ./modules/...
+	gotest -v ./plugins/admin/controller/...
+	gotest -v ./plugins/admin/modules/parameter/...
+	gotest -v ./plugins/admin/modules/table/...
+	gotest -v ./plugins/admin/modules/...
+
+## tests: helpers
 
 import-sqlite:
 	rm -rf ./tests/common/admin.db
-	cp ./data/admin.db ./tests/common/admin.db
+	cp ./tests/data/admin.db ./tests/common/admin.db
 
 import-mysql:
 	mysql -uroot -proot -e "create database if not exists \`go-admin-test\`"
-	mysql -uroot -proot go-admin-test < ./data/admin.sql
+	mysql -uroot -proot go-admin-test < ./tests/data/admin.sql
 
 import-postgresql:
 	dropdb -U postgres go-admin-test
 	createdb -U postgres go-admin-test
-	psql -d go-admin-test -U postgres -f ./data/admin.pgsql
+	psql -d go-admin-test -U postgres -f ./tests/data/admin_pg.sql
 
-pg-test:
-	make import-postgresql
-	gotest -v ./tests/gin/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/beego/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/buffalo/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/chi/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/echo/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/gorilla/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/gf/... -args $(TEST_CONFIG_PQ_PATH)
-	make import-postgresql
-	gotest -v ./tests/fasthttp/... -args $(TEST_CONFIG_PQ_PATH)
+import-mssql:
+	docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P Aa123456 -Q "RESTORE DATABASE [goadmin] FROM DISK = N'/home/data/admin_ms.bak' WITH FILE = 1, NOUNLOAD, REPLACE, RECOVERY, STATS = 5"
+
+backup-mssql:
+	docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P Aa123456 -Q "BACKUP DATABASE [goadmin] TO DISK = N'/home/data/admin_ms.bak' WITH NOFORMAT, NOINIT, NAME = 'goadmin-full', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
 
 fix-gf:
-	go get -u -v github.com/gogf/gf@v1.9.10
-	sudo echo "\nfunc (s *Server) DefaultHttpHandle(w http.ResponseWriter, r *http.Request) { \n s.handleRequest(w, r) \n}\n" >> $(GOPATH)/pkg/mod/github.com/gogf/gf@v1.9.10/net/ghttp/ghttp_server_handler.go
+	go get -u -v github.com/gogf/gf@v1.11.7
+	sudo chmod -R 777 $(GOPATH)/pkg/mod/github.com/gogf/gf@v1.11.7/net/ghttp/ghttp_server_handler.go
+	sudo echo "\nfunc (s *Server) DefaultHttpHandle(w http.ResponseWriter, r *http.Request) { \n s.handleRequest(w, r) \n}\n" >> $(GOPATH)/pkg/mod/github.com/gogf/gf@v1.11.7/net/ghttp/ghttp_server_handler.go
 
-lint:
-	make golint
-	make govet
-	golangci-lint run
+cp-mod:
+	cp go.mod go.mod.old
+	cp go.sum go.sum.old
+
+restore-mod:
+	mv go.mod.old go.mod
+	mv go.sum.old go.sum
+
+## code style check
+
+lint: fmt golint govet cilint
+
+fmt:
+	GO111MODULE=off go fmt ./...
+
+govet:
+	GO111MODULE=off go vet ./...
+
+cilint:
+	GO111MODULE=off golangci-lint run
+
+golint:
+	GO111MODULE=off golint ./...
+
+## cli version update
 
 cli:
 	GO111MODULE=on $(GOBUILD) -ldflags "-w" -o ./adm/build/mac/$(BINARY_NAME) ./adm/...
@@ -139,11 +124,11 @@ cli:
 	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=arm $(GOBUILD) -o ./adm/build/linux/armel/$(BINARY_NAME) ./adm/...
 	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) -o ./adm/build/windows/x86_64/$(BINARY_NAME).exe ./adm/...
 	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=386 $(GOBUILD) -o ./adm/build/windows/i386/$(BINARY_NAME).exe ./adm/...
-	rm -rf ./adm/build/linux/armel/adm_linux_armel_$(LASTVERSION).zip
-	rm -rf ./adm/build/linux/x86_64/adm_linux_x86_64_$(LASTVERSION).zip
-	rm -rf ./adm/build/windows/x86_64/adm_windows_x86_64_$(LASTVERSION).zip
-	rm -rf ./adm/build/windows/i386/adm_windows_i386_$(LASTVERSION).zip
-	rm -rf ./adm/build/mac/adm_darwin_x86_64_$(LASTVERSION).zip
+	rm -rf ./adm/build/linux/armel/adm_linux_armel_$(LAST_VERSION).zip
+	rm -rf ./adm/build/linux/x86_64/adm_linux_x86_64_$(LAST_VERSION).zip
+	rm -rf ./adm/build/windows/x86_64/adm_windows_x86_64_$(LAST_VERSION).zip
+	rm -rf ./adm/build/windows/i386/adm_windows_i386_$(LAST_VERSION).zip
+	rm -rf ./adm/build/mac/adm_darwin_x86_64_$(LAST_VERSION).zip
 	zip -qj ./adm/build/linux/armel/adm_linux_armel_$(VERSION).zip ./adm/build/linux/armel/adm
 	zip -qj ./adm/build/linux/x86_64/adm_linux_x86_64_$(VERSION).zip ./adm/build/linux/x86_64/adm
 	zip -qj ./adm/build/windows/x86_64/adm_windows_x86_64_$(VERSION).zip ./adm/build/windows/x86_64/adm.exe
@@ -155,3 +140,5 @@ cli:
 	cp ./adm/build/windows/x86_64/adm_windows_x86_64_$(VERSION).zip ./adm/build/zip/
 	cp ./adm/build/windows/i386/adm_windows_i386_$(VERSION).zip ./adm/build/zip/
 	cp ./adm/build/mac/adm_darwin_x86_64_$(VERSION).zip ./adm/build/zip/
+
+.PHONY: all fmt golint govet cp-mod restore-mod test black-box-test mysql-test sqlite-test import-sqlite import-mysql import-postgresql pg-test fix-gf lint cilint cli

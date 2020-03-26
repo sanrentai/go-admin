@@ -1,6 +1,7 @@
 package components
 
 import (
+	"github.com/GoAdminGroup/go-admin/modules/config"
 	"github.com/GoAdminGroup/go-admin/modules/menu"
 	"github.com/GoAdminGroup/go-admin/template/types"
 	"github.com/GoAdminGroup/go-admin/template/types/form"
@@ -34,14 +35,17 @@ func (b Base) Col() types.ColAttribute {
 
 func (b Base) Form() types.FormAttribute {
 	return &FormAttribute{
-		Name:      "form",
-		Content:   []types.FormField{},
-		Url:       "/",
-		Method:    "post",
-		InfoUrl:   "",
-		Layout:    form.LayoutDefault,
-		Title:     "edit",
-		Attribute: b.Attribute,
+		Name:         "form",
+		Content:      []types.FormField{},
+		Url:          "/",
+		Method:       "post",
+		HiddenFields: make(map[string]string),
+		Layout:       form.LayoutDefault,
+		Title:        "edit",
+		Attribute:    b.Attribute,
+		CdnUrl:       config.Get().AssetUrl,
+		HeadWidth:    2,
+		InputWidth:   8,
 	}
 }
 
@@ -121,8 +125,8 @@ func (b Base) Button() types.ButtonAttribute {
 func (b Base) Table() types.TableAttribute {
 	return &TableAttribute{
 		Name:      "table",
-		Thead:     []map[string]string{},
-		InfoList:  []map[string]template.HTML{},
+		Thead:     make(types.Thead, 0),
+		InfoList:  make([]map[string]types.InfoItem, 0),
 		Type:      "normal",
 		Layout:    "auto",
 		Attribute: b.Attribute,

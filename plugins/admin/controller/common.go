@@ -8,6 +8,8 @@ import (
 	"github.com/GoAdminGroup/go-admin/modules/language"
 	"github.com/GoAdminGroup/go-admin/modules/service"
 	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/constant"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/form"
+	"github.com/GoAdminGroup/go-admin/plugins/admin/modules/table"
 	"github.com/GoAdminGroup/go-admin/template"
 	"github.com/GoAdminGroup/go-admin/template/icon"
 	"github.com/GoAdminGroup/go-admin/template/types"
@@ -16,44 +18,53 @@ import (
 	"strings"
 )
 
-var (
+type Handler struct {
 	config        c.Config
 	captchaConfig map[string]string
 	services      service.List
 	conn          db.Connection
 	routes        context.RouterMap
-)
-
-func SetRoutes(r context.RouterMap) {
-	routes = r
+	generators    table.GeneratorList
 }
 
-// SetConfig set the config.
-func SetCaptcha(cap map[string]string) {
-	captchaConfig = cap
+func New(cfg Config) *Handler {
+	return &Handler{
+		config:     cfg.Config,
+		services:   cfg.Services,
+		conn:       cfg.Connection,
+		generators: cfg.Generators,
+	}
 }
 
-// SetConfig set the config.
-func SetConfig(cfg c.Config) {
-	config = cfg
+type Config struct {
+	Config     c.Config
+	Services   service.List
+	Connection db.Connection
+	Generators table.GeneratorList
 }
 
-// SetServices set the services.
-func SetServices(l service.List) {
-	services = l
-	conn = db.GetConnection(services)
+func (h *Handler) SetCaptcha(cap map[string]string) {
+	h.captchaConfig = cap
 }
 
-func route(name string) context.Router {
-	return routes.Get(name)
+func (h *Handler) SetRoutes(r context.RouterMap) {
+	h.routes = r
 }
 
-func routePath(name string, value ...string) string {
-	return routes.Get(name).GetURL(value...)
+func (h *Handler) table(prefix string, ctx *context.Context) table.Table {
+	return h.generators[prefix](ctx)
 }
 
-func routePathWithPrefix(name string, prefix string) string {
-	return routePath(name, "prefix", prefix)
+func (h *Handler) route(name string) context.Router {
+	return h.routes.Get(name)
+}
+
+func (h *Handler) routePath(name string, value ...string) string {
+	return h.routes.Get(name).GetURL(value...)
+}
+
+func (h *Handler) routePathWithPrefix(name string, prefix string) string {
+	return h.routePath(name, "prefix", prefix)
 }
 
 func isInfoUrl(s string) bool {
@@ -72,8 +83,8 @@ func isEditUrl(s string, p string) bool {
 	return reg.MatchString(s)
 }
 
-func authSrv() *auth.TokenService {
-	return auth.GetTokenService(services.Get(auth.TokenServiceKey))
+func (h *Handler) authSrv() *auth.TokenService {
+	return auth.GetTokenService(h.services.Get(auth.TokenServiceKey))
 }
 
 func aAlert() types.AlertAttribute {
@@ -113,15 +124,83 @@ func aTab() types.TabsAttribute {
 }
 
 func aTemplate() template.Template {
-	return template.Get(config.Theme)
+	return template.Get(c.Get().Theme)
 }
 
 func isPjax(ctx *context.Context) bool {
 	return ctx.Headers(constant.PjaxHeader) == "true"
 }
 
-func formFooter() template2.HTML {
+func formFooter(page string) template2.HTML {
 	col1 := aCol().SetSize(types.SizeMD(2)).GetContent()
+
+	var (
+		checkBoxs  template2.HTML
+		checkBoxJS template2.HTML
+	)
+
+	if page == "edit" {
+		checkBoxs = template.HTML(`
+			<label class="pull-right" style="margin: 5px 10px 0 0;">
+                <input type="checkbox" class="continue_edit" style="position: absolute; opacity: 0;"> ` + language.Get("continue editing") + `
+            </label>
+			<label class="pull-right" style="margin: 5px 10px 0 0;">
+                <input type="checkbox" class="continue_new" style="position: absolute; opacity: 0;"> ` + language.Get("continue creating") + `
+            </label>`)
+		checkBoxJS = template.HTML(`<script>	
+	let previous_url_goadmin = $('input[name="` + form.PreviousKey + `"]').attr("value")
+	$('.continue_edit').iCheck({checkboxClass: 'icheckbox_minimal-blue'}).on('ifChanged', function (event) {
+		if (this.checked) {
+			$('.continue_new').iCheck('uncheck');
+			$('input[name="` + form.PreviousKey + `"]').val(location.href)
+		} else {
+			$('input[name="` + form.PreviousKey + `"]').val(previous_url_goadmin)
+		}
+	});	
+	$('.continue_new').iCheck({checkboxClass: 'icheckbox_minimal-blue'}).on('ifChanged', function (event) {
+		if (this.checked) {
+			$('.continue_edit').iCheck('uncheck');
+			$('input[name="` + form.PreviousKey + `"]').val(location.href.replace('/edit', '/new'))
+		} else {
+			$('input[name="` + form.PreviousKey + `"]').val(previous_url_goadmin)
+		}
+	});
+</script>
+`)
+	} else if page == "edit_only" {
+		checkBoxs = template.HTML(`
+			<label class="pull-right" style="margin: 5px 10px 0 0;">
+                <input type="checkbox" class="continue_edit" style="position: absolute; opacity: 0;"> ` + language.Get("continue editing") + `
+            </label>`)
+		checkBoxJS = template.HTML(`	<script>
+	let previous_url_goadmin = $('input[name="` + form.PreviousKey + `"]').attr("value")
+	$('.continue_edit').iCheck({checkboxClass: 'icheckbox_minimal-blue'}).on('ifChanged', function (event) {
+		if (this.checked) {
+			$('input[name="` + form.PreviousKey + `"]').val(location.href)
+		} else {
+			$('input[name="` + form.PreviousKey + `"]').val(previous_url_goadmin)
+		}
+	});
+</script>
+`)
+	} else if page == "new" {
+		checkBoxs = template.HTML(`
+			<label class="pull-right" style="margin: 5px 10px 0 0;">
+                <input type="checkbox" class="continue_new" style="position: absolute; opacity: 0;"> ` + language.Get("continue creating") + `
+            </label>`)
+		checkBoxJS = template.HTML(`	<script>
+	let previous_url_goadmin = $('input[name="` + form.PreviousKey + `"]').attr("value")
+	$('.continue_new').iCheck({checkboxClass: 'icheckbox_minimal-blue'}).on('ifChanged', function (event) {
+		if (this.checked) {
+			$('input[name="` + form.PreviousKey + `"]').val(location.href)
+		} else {
+			$('input[name="` + form.PreviousKey + `"]').val(previous_url_goadmin)
+		}
+	});
+</script>
+`)
+	}
+
 	btn1 := aButton().SetType("submit").
 		SetContent(language.GetFromHtml("Save")).
 		SetThemePrimary().
@@ -133,7 +212,7 @@ func formFooter() template2.HTML {
 		SetOrientationLeft().
 		GetContent()
 	col2 := aCol().SetSize(types.SizeMD(8)).
-		SetContent(btn1 + btn2).GetContent()
+		SetContent(btn1 + checkBoxs + btn2 + checkBoxJS).GetContent()
 	return col1 + col2
 }
 
@@ -161,8 +240,9 @@ func filterFormFooter(infoUrl string) template2.HTML {
 
 func formContent(form types.FormAttribute) template2.HTML {
 	return aBox().
-		SetHeader(form.GetBoxHeader()).
+		SetHeader(form.GetDefaultBoxHeader()).
 		WithHeadBorder().
+		SetStyle(" ").
 		SetBody(form.GetContent()).
 		GetContent()
 }
